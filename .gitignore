@@ -9,6 +9,9 @@ bira
 # Build output
 dist/
 
+# Findings
+findings/
+
 # Test binary, built with `go test -c`
 *.test
 

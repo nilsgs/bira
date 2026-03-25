@@ -96,6 +96,12 @@ For each completed task:
    ```bash
    git commit -m "feat(f2e30189): <feature name> - <task-id> <task name>
 
+   <task description — one or two sentences explaining what this task does>
+
+   Changes:
+   - <brief bullet summary of what was added, changed, or removed>
+   - <another change if applicable>
+
    Completes task: <task-id>
    Feature: <feature-id> <feature-name>
    "
@@ -104,6 +110,14 @@ For each completed task:
    Example commit message:
    ```
    feat(f2e30189): auth-system - 3e973703 Add JWT validation middleware
+
+   Validates Bearer tokens on every protected route using the shared JWKS endpoint.
+   Rejects expired or malformed tokens with 401 before the handler runs.
+
+   Changes:
+   - Add JWTMiddleware to the middleware chain in server.go
+   - Add ValidateToken() helper in internal/auth/jwt.go
+   - Add unit tests for expired, malformed, and valid token cases
 
    Completes task: 3e973703
    Feature: f2e30189 auth-system
@@ -280,7 +294,7 @@ Loop:
   bira task update --status in-progress
   implement work
   run tests (must be green)
-  git commit -m "feat(<id>): ..."
+  git commit -m "feat(<id>): ... - <task-id> <task name>\n\n<description>\n\nChanges:\n- ...\n\nCompletes task: <task-id>\nFeature: <feature-id> <feature-name>"
   bira task done
 Record findings in findings/<id>-<name>.md
 bira feature update --status done
