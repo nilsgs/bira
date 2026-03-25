@@ -18,8 +18,12 @@ Use this skill when:
 - You need a machine-readable snapshot of open work (`bira context --json`)
 
 Out of scope:
-- Contributing to bira's own Go source code
-- Installing bira (see README.md)
+- Installing bira from source (see README.md)
+
+> **Note:** When developing bira itself, this skill still applies — use bira to track your own
+> work (features, tasks, findings). AGENTS.md defines the full workflow. The fact that you are
+> editing bira's Go source does not exempt you from running `bira feature add`, creating a branch,
+> or committing per-task.
 
 ---
 
@@ -104,13 +108,19 @@ bira task add "Implement login endpoint" --feature <feature-id>
 # Task in the backlog (no --feature needed)
 bira task add "Investigate auth library options"
 
-# With metadata
+# With full metadata
 bira task add "Write unit tests" --feature <feature-id> \
   --desc "Cover happy path and error cases" \
   --assign "agent" \
   --tags "testing,auth" \
-  --depends-on "<other-task-id>"
+  --depends-on "<other-task-id>" \
+  --criteria "All edge cases covered" \
+  --criteria "Coverage >= 80%" \
+  --files "src/cmd/task.go,src/internal/models/task.go"
 ```
+
+`--criteria` is repeatable — each flag invocation adds one criterion. Text may contain commas.
+`--files` is comma-separated and records which files the task touches.
 
 ### 5. Update status as you work
 
@@ -120,6 +130,12 @@ bira task update <id> --status in-progress
 
 # Shorthand to mark done (preferred over update --status done)
 bira task done <id>
+
+# Append an agent observation to a task (append-only, timestamped)
+bira task note <id> "Discovered X while implementing Y"
+
+# Append a finding to a feature
+bira feature note <id> "Design decision: chose approach A over B because..."
 
 # Mark a feature done when all its tasks are complete
 bira feature update <id> --status done
@@ -188,6 +204,9 @@ bira feature show <id>
 # Update
 bira feature update <id> [--status <status>] [--desc <text>] [--assign <name>] [--tags <t1,t2>]
 
+# Append a timestamped note (append-only)
+bira feature note <id> <message>
+
 # Delete (cannot delete the backlog feature)
 bira feature delete <id>
 ```
@@ -199,22 +218,28 @@ bira feature delete <id>
 ```bash
 # Create
 bira task add <title> \
-  [--feature <id>]          # default: backlog
+  [--feature <id>]             # default: backlog
   [--desc <text>] \
   [--assign <name>] \
   [--tags <t1,t2>] \
-  [--depends-on <id1,id2>]  # informational only, not validated
+  [--depends-on <id1,id2>]     # informational only, not validated
+  [--criteria <text>]          # acceptance criterion; repeat for multiple
+  [--files <f1,f2>]            # comma-separated file references
 
 # Read
 bira task list [--feature <id>] [--status <status>]
 bira task show <id>
 
-# Update
+# Update (replaces existing values for --criteria and --files)
 bira task update <id> [--status <status>] [--desc <text>] [--assign <name>] \
-  [--tags <t1,t2>] [--depends-on <id1,id2>]
+  [--tags <t1,t2>] [--depends-on <id1,id2>] \
+  [--criteria <text>] [--files <f1,f2>]
 
 # Shorthand to mark done
 bira task done <id>
+
+# Append a timestamped note (append-only)
+bira task note <id> <message>
 
 # Delete
 bira task delete <id>

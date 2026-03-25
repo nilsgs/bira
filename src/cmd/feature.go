@@ -69,6 +69,15 @@ var featureDeleteCmd = &cobra.Command{
 	RunE:  runFeatureDelete,
 }
 
+// --- note ---
+
+var featureNoteCmd = &cobra.Command{
+	Use:   "note <id> <message>",
+	Short: "Append a note to a feature",
+	Args:  cobra.ExactArgs(2),
+	RunE:  runFeatureNote,
+}
+
 func init() {
 	featureAddCmd.Flags().StringVar(&featureAddDesc, "desc", "", "feature description")
 	featureAddCmd.Flags().StringVar(&featureAddAssign, "assign", "", "assigned agent/user")
@@ -81,7 +90,7 @@ func init() {
 	featureUpdateCmd.Flags().StringVar(&featureUpdateAssign, "assign", "", "new assignee")
 	featureUpdateCmd.Flags().StringVar(&featureUpdateTags, "tags", "", "new comma-separated tags")
 
-	featureCmd.AddCommand(featureAddCmd, featureListCmd, featureShowCmd, featureUpdateCmd, featureDeleteCmd)
+	featureCmd.AddCommand(featureAddCmd, featureListCmd, featureShowCmd, featureUpdateCmd, featureDeleteCmd, featureNoteCmd)
 	rootCmd.AddCommand(featureCmd)
 }
 
@@ -196,6 +205,12 @@ func runFeatureShow(cmd *cobra.Command, args []string) error {
 		if len(feature.Tags) > 0 {
 			fmt.Fprintf(w, "Tags:        %s\n", strings.Join(feature.Tags, ", "))
 		}
+		if len(feature.Notes) > 0 {
+			fmt.Fprintf(w, "Notes:\n")
+			for _, n := range feature.Notes {
+				fmt.Fprintf(w, "  [%s] %s\n", n.Timestamp.Format("2006-01-02 15:04:05"), n.Body)
+			}
+		}
 		fmt.Fprintf(w, "Backlog:     %v\n", feature.IsBacklog)
 		fmt.Fprintf(w, "Created:     %s\n", feature.CreatedAt.Format("2006-01-02 15:04:05"))
 		fmt.Fprintf(w, "Updated:     %s\n", feature.UpdatedAt.Format("2006-01-02 15:04:05"))
@@ -295,6 +310,47 @@ func runFeatureDelete(cmd *cobra.Command, args []string) error {
 }
 
 // --- helpers ---
+
+func runFeatureNote(cmd *cobra.Command, args []string) error {
+	projectID, err := resolveProject()
+	if err != nil {
+		return err
+	}
+	projectDir, err := store.ProjectDir(projectID)
+	if err != nil {
+		return err
+	}
+
+	lock, err := store.AcquireLock(projectDir)
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+
+	feature, err := loadFeature(projectID, args[0])
+	if err != nil {
+		if os.IsNotExist(err) {
+			exitNotFound("feature", args[0])
+		}
+		return err
+	}
+
+	feature.Notes = append(feature.Notes, models.Note{
+		Timestamp: time.Now().UTC(),
+		Body:      args[1],
+	})
+	feature.UpdatedAt = time.Now().UTC()
+
+	path := filepath.Join(projectDir, "features", feature.ID+".json")
+	if err := store.SaveJSON(path, feature); err != nil {
+		return fmt.Errorf("save feature: %w", err)
+	}
+
+	output(cmd, feature, func(w io.Writer) {
+		fmt.Fprintf(w, "Note added to feature %q (%s)\n", feature.Name, feature.ID)
+	})
+	return nil
+}
 
 func loadAllFeatures(projectID string) ([]models.Feature, error) {
 	projectDir, err := store.ProjectDir(projectID)

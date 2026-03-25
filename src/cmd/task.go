@@ -22,6 +22,8 @@ var taskCmd = &cobra.Command{
 // --- add ---
 
 var taskAddFeature, taskAddDesc, taskAddAssign, taskAddTags, taskAddDependsOn string
+var taskAddCriteria []string
+var taskAddFiles string
 
 var taskAddCmd = &cobra.Command{
 	Use:   "add <title>",
@@ -52,6 +54,8 @@ var taskShowCmd = &cobra.Command{
 // --- update ---
 
 var taskUpdateStatus, taskUpdateDesc, taskUpdateAssign, taskUpdateTags, taskUpdateDependsOn string
+var taskUpdateCriteria []string
+var taskUpdateFiles string
 
 var taskUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
@@ -69,6 +73,15 @@ var taskDeleteCmd = &cobra.Command{
 	RunE:  runTaskDelete,
 }
 
+// --- note ---
+
+var taskNoteCmd = &cobra.Command{
+	Use:   "note <id> <message>",
+	Short: "Append a note to a task",
+	Args:  cobra.ExactArgs(2),
+	RunE:  runTaskNote,
+}
+
 // --- done ---
 
 var taskDoneCmd = &cobra.Command{
@@ -84,6 +97,8 @@ func init() {
 	taskAddCmd.Flags().StringVar(&taskAddAssign, "assign", "", "assigned agent/user")
 	taskAddCmd.Flags().StringVar(&taskAddTags, "tags", "", "comma-separated tags")
 	taskAddCmd.Flags().StringVar(&taskAddDependsOn, "depends-on", "", "comma-separated task IDs this depends on")
+	taskAddCmd.Flags().StringArrayVar(&taskAddCriteria, "criteria", nil, "acceptance criterion (repeatable)")
+	taskAddCmd.Flags().StringVar(&taskAddFiles, "files", "", "comma-separated file references")
 
 	taskListCmd.Flags().StringVar(&taskListFeature, "feature", "", "filter by feature ID")
 	taskListCmd.Flags().StringVar(&taskListStatus, "status", "", "filter by status")
@@ -93,8 +108,10 @@ func init() {
 	taskUpdateCmd.Flags().StringVar(&taskUpdateAssign, "assign", "", "new assignee")
 	taskUpdateCmd.Flags().StringVar(&taskUpdateTags, "tags", "", "new comma-separated tags")
 	taskUpdateCmd.Flags().StringVar(&taskUpdateDependsOn, "depends-on", "", "new comma-separated dependency IDs")
+	taskUpdateCmd.Flags().StringArrayVar(&taskUpdateCriteria, "criteria", nil, "acceptance criteria, replaces existing (repeatable)")
+	taskUpdateCmd.Flags().StringVar(&taskUpdateFiles, "files", "", "new comma-separated file references")
 
-	taskCmd.AddCommand(taskAddCmd, taskListCmd, taskShowCmd, taskUpdateCmd, taskDeleteCmd, taskDoneCmd)
+	taskCmd.AddCommand(taskAddCmd, taskListCmd, taskShowCmd, taskUpdateCmd, taskDeleteCmd, taskNoteCmd, taskDoneCmd)
 	rootCmd.AddCommand(taskCmd)
 }
 
@@ -135,17 +152,19 @@ func runTaskAdd(cmd *cobra.Command, args []string) error {
 
 	now := time.Now().UTC()
 	task := models.Task{
-		ID:          store.NewID(),
-		ProjectID:   projectID,
-		FeatureID:   featureID,
-		Title:       args[0],
-		Description: taskAddDesc,
-		Status:      models.StatusTodo,
-		AssignedTo:  taskAddAssign,
-		Tags:        parseTags(taskAddTags),
-		DependsOn:   parseTags(taskAddDependsOn),
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:                 store.NewID(),
+		ProjectID:          projectID,
+		FeatureID:          featureID,
+		Title:              args[0],
+		Description:        taskAddDesc,
+		Status:             models.StatusTodo,
+		AssignedTo:         taskAddAssign,
+		Tags:               parseTags(taskAddTags),
+		DependsOn:          parseTags(taskAddDependsOn),
+		AcceptanceCriteria: taskAddCriteria,
+		Files:              parseTags(taskAddFiles),
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 
 	path := filepath.Join(projectDir, "tasks", task.ID+".json")
@@ -238,6 +257,21 @@ func runTaskShow(cmd *cobra.Command, args []string) error {
 		if len(task.DependsOn) > 0 {
 			fmt.Fprintf(w, "Depends on:  %s\n", strings.Join(task.DependsOn, ", "))
 		}
+		if len(task.AcceptanceCriteria) > 0 {
+			fmt.Fprintf(w, "Criteria:\n")
+			for _, c := range task.AcceptanceCriteria {
+				fmt.Fprintf(w, "  - %s\n", c)
+			}
+		}
+		if len(task.Files) > 0 {
+			fmt.Fprintf(w, "Files:       %s\n", strings.Join(task.Files, ", "))
+		}
+		if len(task.Notes) > 0 {
+			fmt.Fprintf(w, "Notes:\n")
+			for _, n := range task.Notes {
+				fmt.Fprintf(w, "  [%s] %s\n", n.Timestamp.Format("2006-01-02 15:04:05"), n.Body)
+			}
+		}
 		fmt.Fprintf(w, "Created:     %s\n", task.CreatedAt.Format("2006-01-02 15:04:05"))
 		fmt.Fprintf(w, "Updated:     %s\n", task.UpdatedAt.Format("2006-01-02 15:04:05"))
 	})
@@ -285,6 +319,12 @@ func runTaskUpdate(cmd *cobra.Command, args []string) error {
 	}
 	if cmd.Flags().Changed("depends-on") {
 		task.DependsOn = parseTags(taskUpdateDependsOn)
+	}
+	if cmd.Flags().Changed("criteria") {
+		task.AcceptanceCriteria = taskUpdateCriteria
+	}
+	if cmd.Flags().Changed("files") {
+		task.Files = parseTags(taskUpdateFiles)
 	}
 	task.UpdatedAt = time.Now().UTC()
 
@@ -373,6 +413,47 @@ func runTaskDone(cmd *cobra.Command, args []string) error {
 }
 
 // --- helpers ---
+
+func runTaskNote(cmd *cobra.Command, args []string) error {
+	projectID, err := resolveProject()
+	if err != nil {
+		return err
+	}
+	projectDir, err := store.ProjectDir(projectID)
+	if err != nil {
+		return err
+	}
+
+	lock, err := store.AcquireLock(projectDir)
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+
+	task, err := loadTask(projectID, args[0])
+	if err != nil {
+		if os.IsNotExist(err) {
+			exitNotFound("task", args[0])
+		}
+		return err
+	}
+
+	task.Notes = append(task.Notes, models.Note{
+		Timestamp: time.Now().UTC(),
+		Body:      args[1],
+	})
+	task.UpdatedAt = time.Now().UTC()
+
+	path := filepath.Join(projectDir, "tasks", task.ID+".json")
+	if err := store.SaveJSON(path, task); err != nil {
+		return fmt.Errorf("save task: %w", err)
+	}
+
+	output(cmd, task, func(w io.Writer) {
+		fmt.Fprintf(w, "Note added to task %q (%s)\n", task.Title, task.ID)
+	})
+	return nil
+}
 
 func loadAllTasks(projectID string) ([]models.Task, error) {
 	projectDir, err := store.ProjectDir(projectID)

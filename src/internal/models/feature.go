@@ -11,6 +11,7 @@ type Feature struct {
 	AssignedTo  string    `json:"assigned_to,omitempty"`
 	Tags        []string  `json:"tags,omitempty"`
 	IsBacklog   bool      `json:"is_backlog"`
+	Notes       []Note    `json:"notes,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

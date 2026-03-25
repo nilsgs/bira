@@ -2,6 +2,20 @@
 
 This document codifies the workflow for agents developing bira features.
 
+## Pre-Implementation Gate
+
+**Do NOT write any code until all three steps below are complete.** Skipping this gate means
+work is untracked and untraceable — do not proceed past this section without confirming each item.
+
+- [ ] `bira feature add` — feature created, ID captured
+- [ ] `git checkout -b feature/<id>-<name>` — branch created and checked out
+- [ ] `bira task add` × N — every planned task registered in bira, IDs captured
+- [ ] `findings/<id>-<name>.md` created from the template (can be mostly empty — fill as you go)
+
+If any item is incomplete, do it now before touching source files.
+
+---
+
 ## Prerequisites
 
 - bira CLI is pre-installed (do not build from source)
@@ -39,6 +53,12 @@ bira task add "<another task>" --feature <feature-id> --json
 
 Capture task IDs as you work.
 
+Also create the findings file now:
+
+```bash
+# Create findings/<feature-id>-<short-name>.md from the template at the bottom of this document
+```
+
 ### 4. Implement and Commit
 
 For each completed task:
@@ -68,6 +88,9 @@ For each completed task:
    ```
 
    **Green tests are mandatory** — only commit code that passes all tests. If tests fail, update the implementation until all tests pass.
+
+> **STOP after each task.** Complete steps 1–5 fully for one task before starting the next.
+> One task = one commit + one `bira task done`. Do not batch across tasks.
 
 4. **Commit with bira metadata**
    ```bash
@@ -112,10 +135,48 @@ See [Findings Format](#findings-format) below.
 
 Once all tasks are done:
 
-```bash
-bira feature update <feature-id> --status done
-git push origin feature/<feature-id>-<short-name>
-```
+1. **Verify tests are comprehensive and green**
+
+   New functionality must be covered by tests. Run the full suite:
+   ```bash
+   make test-local
+   ```
+   Only proceed when all tests pass. If any fail, fix the implementation first.
+
+2. **Update README.md**
+
+   Document any new CLI flags, subcommands, or changed behaviours introduced by the feature. Keep the command reference tables and examples in sync with the implementation.
+
+3. **Update the bira skill**
+
+   If the feature added or changed CLI commands, flags, or data model fields, update `.agents/skills/bira/SKILL.md` to reflect the current behaviour. Agents depend on this skill to operate bira correctly.
+
+4. **Ask the user: bump version and publish?**
+
+   Before committing, ask:
+
+   > "Do you want to bump the version and publish a new release?"
+
+   If **yes**:
+   1. Read the current version: `cat VERSION`
+   2. Determine the new version with the user (patch / minor / major bump per SemVer)
+   3. Write the new version: `echo "<new-version>" > VERSION`
+   4. Commit the version bump:
+      ```bash
+      git add VERSION
+      git commit -m "chore: bump version to <new-version>"
+      ```
+   5. Ask the user: "Do you want to run an install script to rebuild and install the binary locally?"
+      - **Linux / macOS:** `./install.sh`
+      - **Windows:** `.\install.ps1`
+
+   If **no**, skip and proceed to the next step.
+
+5. **Mark the feature done and push**
+   ```bash
+   bira feature update <feature-id> --status done
+   git push origin feature/<feature-id>-<short-name>
+   ```
 
 ---
 

@@ -41,6 +41,8 @@ func (e *testEnv) run(args ...string) string {
 	taskAddAssign = ""
 	taskAddTags = ""
 	taskAddDependsOn = ""
+	taskAddCriteria = nil
+	taskAddFiles = ""
 	taskListFeature = ""
 	taskListStatus = ""
 	taskUpdateStatus = ""
@@ -48,6 +50,8 @@ func (e *testEnv) run(args ...string) string {
 	taskUpdateAssign = ""
 	taskUpdateTags = ""
 	taskUpdateDependsOn = ""
+	taskUpdateCriteria = nil
+	taskUpdateFiles = ""
 	featureAddDesc = ""
 	featureAddAssign = ""
 	featureAddTags = ""
@@ -312,5 +316,121 @@ func TestJSONOutput(t *testing.T) {
 	out = e.run("task", "list", "--project", pid)
 	if json.Valid([]byte(out)) && strings.HasPrefix(strings.TrimSpace(out), "[") {
 		t.Errorf("human output looks like JSON:\n%s", out)
+	}
+}
+
+func TestTaskAddCriteria(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("tcrit-proj")
+
+	out := e.run("task", "add", "crit-task", "--project", pid,
+		"--criteria", "system returns 200",
+		"--criteria", "response includes, comma check",
+		"--json")
+	var task models.Task
+	if err := json.Unmarshal([]byte(out), &task); err != nil {
+		t.Fatalf("parse: %v\nraw: %s", err, out)
+	}
+	if len(task.AcceptanceCriteria) != 2 {
+		t.Errorf("acceptance_criteria len = %d, want 2", len(task.AcceptanceCriteria))
+	}
+	if task.AcceptanceCriteria[0] != "system returns 200" {
+		t.Errorf("criteria[0] = %q", task.AcceptanceCriteria[0])
+	}
+	if task.AcceptanceCriteria[1] != "response includes, comma check" {
+		t.Errorf("criteria[1] = %q; commas should be preserved", task.AcceptanceCriteria[1])
+	}
+}
+
+func TestTaskAddFiles(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("tfiles-proj")
+
+	out := e.run("task", "add", "files-task", "--project", pid,
+		"--files", "src/cmd/task.go,src/internal/models/task.go",
+		"--json")
+	var task models.Task
+	if err := json.Unmarshal([]byte(out), &task); err != nil {
+		t.Fatalf("parse: %v\nraw: %s", err, out)
+	}
+	if len(task.Files) != 2 {
+		t.Errorf("files len = %d, want 2", len(task.Files))
+	}
+	if task.Files[0] != "src/cmd/task.go" {
+		t.Errorf("files[0] = %q", task.Files[0])
+	}
+}
+
+func TestTaskNote(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("tnote-proj")
+
+	aout := e.run("task", "add", "note-task", "--project", pid, "--json")
+	var added models.Task
+	json.Unmarshal([]byte(aout), &added)
+
+	e.run("task", "note", added.ID, "agent observation one", "--project", pid)
+	e.run("task", "note", added.ID, "agent observation two", "--project", pid)
+
+	out := e.run("task", "show", added.ID, "--project", pid, "--json")
+	var task models.Task
+	if err := json.Unmarshal([]byte(out), &task); err != nil {
+		t.Fatalf("parse: %v\nraw: %s", err, out)
+	}
+	if len(task.Notes) != 2 {
+		t.Errorf("notes len = %d, want 2", len(task.Notes))
+	}
+	if task.Notes[0].Body != "agent observation one" {
+		t.Errorf("notes[0].body = %q", task.Notes[0].Body)
+	}
+	if task.Notes[1].Body != "agent observation two" {
+		t.Errorf("notes[1].body = %q", task.Notes[1].Body)
+	}
+}
+
+func TestFeatureNote(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("fnote-proj")
+
+	fout := e.run("feature", "add", "note-feat", "--project", pid, "--json")
+	var added models.Feature
+	json.Unmarshal([]byte(fout), &added)
+
+	e.run("feature", "note", added.ID, "feature finding alpha", "--project", pid)
+
+	out := e.run("feature", "show", added.ID, "--project", pid, "--json")
+	var feature models.Feature
+	if err := json.Unmarshal([]byte(out), &feature); err != nil {
+		t.Fatalf("parse: %v\nraw: %s", err, out)
+	}
+	if len(feature.Notes) != 1 {
+		t.Errorf("notes len = %d, want 1", len(feature.Notes))
+	}
+	if feature.Notes[0].Body != "feature finding alpha" {
+		t.Errorf("notes[0].body = %q", feature.Notes[0].Body)
+	}
+}
+
+func TestTaskUpdateCriteria(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("tupdcrit-proj")
+
+	aout := e.run("task", "add", "updcrit-task", "--project", pid, "--json")
+	var added models.Task
+	json.Unmarshal([]byte(aout), &added)
+
+	out := e.run("task", "update", added.ID, "--project", pid,
+		"--criteria", "updated criterion",
+		"--files", "src/cmd/task.go",
+		"--json")
+	var task models.Task
+	if err := json.Unmarshal([]byte(out), &task); err != nil {
+		t.Fatalf("parse: %v\nraw: %s", err, out)
+	}
+	if len(task.AcceptanceCriteria) != 1 || task.AcceptanceCriteria[0] != "updated criterion" {
+		t.Errorf("acceptance_criteria = %v", task.AcceptanceCriteria)
+	}
+	if len(task.Files) != 1 || task.Files[0] != "src/cmd/task.go" {
+		t.Errorf("files = %v", task.Files)
 	}
 }

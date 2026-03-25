@@ -91,6 +91,7 @@ bira feature list [--status <status>]
 bira feature show <id>
 bira feature update <id> [flags]
 bira feature delete <id>
+bira feature note <id> <message>
 ```
 
 The **backlog** feature (auto-created by `bira init`) cannot be deleted.
@@ -104,6 +105,8 @@ The **backlog** feature (auto-created by `bira init`) cannot be deleted.
 | `--tags <t1,t2>` | Comma-separated tags |
 | `--status <status>` | *(update only)* New status |
 
+`bira feature note <id> <message>` appends a timestamped note to the feature. Notes are append-only.
+
 ---
 
 ### `bira task`
@@ -115,6 +118,7 @@ bira task show <id>
 bira task update <id> [flags]
 bira task delete <id>
 bira task done <id>              # shorthand for update --status done
+bira task note <id> <message>   # append a timestamped note
 ```
 
 `add` without `--feature` automatically assigns the task to the project's backlog feature.
@@ -128,7 +132,11 @@ bira task done <id>              # shorthand for update --status done
 | `--assign <name>` | Assigned agent or user |
 | `--tags <t1,t2>` | Comma-separated tags |
 | `--depends-on <id1,id2>` | Comma-separated dependency task IDs |
+| `--criteria <text>` | Acceptance criterion — repeat flag for multiple (text may contain commas) |
+| `--files <f1,f2>` | Comma-separated file references touched by this task |
 | `--status <status>` | *(update only)* New status |
+
+`bira task note <id> <message>` appends a timestamped note to the task. Notes are append-only and visible in `task show`.
 
 ---
 
