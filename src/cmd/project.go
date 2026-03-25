@@ -97,7 +97,7 @@ func runProjectShow(cmd *cobra.Command, args []string) error {
 	project, err := loadProject(id)
 	if err != nil {
 		if os.IsNotExist(err) {
-			exitNotFound("project", id)
+			return notFoundErr("project", id)
 		}
 		return err
 	}
@@ -128,7 +128,7 @@ func runProjectDelete(cmd *cobra.Command, args []string) error {
 	project, err := loadProject(id)
 	if err != nil {
 		if os.IsNotExist(err) {
-			exitNotFound("project", id)
+			return notFoundErr("project", id)
 		}
 		return err
 	}

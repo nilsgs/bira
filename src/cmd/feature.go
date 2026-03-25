@@ -187,7 +187,7 @@ func runFeatureShow(cmd *cobra.Command, args []string) error {
 	feature, err := loadFeature(projectID, args[0])
 	if err != nil {
 		if os.IsNotExist(err) {
-			exitNotFound("feature", args[0])
+			return notFoundErr("feature", args[0])
 		}
 		return err
 	}
@@ -237,7 +237,7 @@ func runFeatureUpdate(cmd *cobra.Command, args []string) error {
 	feature, err := loadFeature(projectID, args[0])
 	if err != nil {
 		if os.IsNotExist(err) {
-			exitNotFound("feature", args[0])
+			return notFoundErr("feature", args[0])
 		}
 		return err
 	}
@@ -289,7 +289,7 @@ func runFeatureDelete(cmd *cobra.Command, args []string) error {
 	feature, err := loadFeature(projectID, args[0])
 	if err != nil {
 		if os.IsNotExist(err) {
-			exitNotFound("feature", args[0])
+			return notFoundErr("feature", args[0])
 		}
 		return err
 	}
@@ -330,7 +330,7 @@ func runFeatureNote(cmd *cobra.Command, args []string) error {
 	feature, err := loadFeature(projectID, args[0])
 	if err != nil {
 		if os.IsNotExist(err) {
-			exitNotFound("feature", args[0])
+			return notFoundErr("feature", args[0])
 		}
 		return err
 	}

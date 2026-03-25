@@ -86,12 +86,7 @@ func notFoundErr(entity, id string) error {
 	return &notFoundError{entity: entity, id: id}
 }
 
-// exitNotFound is deprecated: use return notFoundErr(...) instead.
-// Kept temporarily until all call sites are migrated.
-func exitNotFound(entity, id string) {
-	fmt.Fprintf(os.Stderr, "%s not found: %s\n", entity, id)
-	os.Exit(2)
-}
+
 
 // output dispatches to JSON or human-readable depending on --json flag.
 // The writer is obtained from cmd.OutOrStdout().

@@ -144,7 +144,7 @@ func runTaskAdd(cmd *cobra.Command, args []string) error {
 		// Verify feature exists
 		if _, err := loadFeature(projectID, featureID); err != nil {
 			if os.IsNotExist(err) {
-				exitNotFound("feature", featureID)
+				return notFoundErr("feature", featureID)
 			}
 			return err
 		}
@@ -235,7 +235,7 @@ func runTaskShow(cmd *cobra.Command, args []string) error {
 	task, err := loadTask(projectID, args[0])
 	if err != nil {
 		if os.IsNotExist(err) {
-			exitNotFound("task", args[0])
+			return notFoundErr("task", args[0])
 		}
 		return err
 	}
@@ -297,7 +297,7 @@ func runTaskUpdate(cmd *cobra.Command, args []string) error {
 	task, err := loadTask(projectID, args[0])
 	if err != nil {
 		if os.IsNotExist(err) {
-			exitNotFound("task", args[0])
+			return notFoundErr("task", args[0])
 		}
 		return err
 	}
@@ -358,7 +358,7 @@ func runTaskDelete(cmd *cobra.Command, args []string) error {
 	task, err := loadTask(projectID, args[0])
 	if err != nil {
 		if os.IsNotExist(err) {
-			exitNotFound("task", args[0])
+			return notFoundErr("task", args[0])
 		}
 		return err
 	}
@@ -393,7 +393,7 @@ func runTaskDone(cmd *cobra.Command, args []string) error {
 	task, err := loadTask(projectID, args[0])
 	if err != nil {
 		if os.IsNotExist(err) {
-			exitNotFound("task", args[0])
+			return notFoundErr("task", args[0])
 		}
 		return err
 	}
@@ -433,7 +433,7 @@ func runTaskNote(cmd *cobra.Command, args []string) error {
 	task, err := loadTask(projectID, args[0])
 	if err != nil {
 		if os.IsNotExist(err) {
-			exitNotFound("task", args[0])
+			return notFoundErr("task", args[0])
 		}
 		return err
 	}
