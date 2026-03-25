@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -432,5 +433,142 @@ func TestTaskUpdateCriteria(t *testing.T) {
 	}
 	if len(task.Files) != 1 || task.Files[0] != "src/cmd/task.go" {
 		t.Errorf("files = %v", task.Files)
+	}
+}
+
+// runExpectErr executes a bira command and returns the error.
+// Unlike run(), it does NOT fatal on error — it returns it for assertion.
+func (e *testEnv) runExpectErr(args ...string) error {
+	e.t.Helper()
+	e.out.Reset()
+
+	jsonOutput = false
+	projectFlag = ""
+	initName = ""
+	taskAddFeature = ""
+	taskAddDesc = ""
+	taskAddAssign = ""
+	taskAddTags = ""
+	taskAddDependsOn = ""
+	taskAddCriteria = nil
+	taskAddFiles = ""
+	taskListFeature = ""
+	taskListStatus = ""
+	taskUpdateStatus = ""
+	taskUpdateDesc = ""
+	taskUpdateAssign = ""
+	taskUpdateTags = ""
+	taskUpdateDependsOn = ""
+	taskUpdateCriteria = nil
+	taskUpdateFiles = ""
+	featureAddDesc = ""
+	featureAddAssign = ""
+	featureAddTags = ""
+	featureListStatus = ""
+	featureUpdateStatus = ""
+	featureUpdateDesc = ""
+	featureUpdateAssign = ""
+	featureUpdateTags = ""
+
+	rootCmd.SetOut(&e.out)
+	rootCmd.SetErr(&e.out)
+	rootCmd.SetArgs(args)
+
+	return rootCmd.Execute()
+}
+
+// assertNotFound checks that err is a *notFoundError for the given entity and id.
+func assertNotFound(t *testing.T, err error, entity, id string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("expected not-found error for %s %q, got nil", entity, id)
+	}
+	var nfe *notFoundError
+	if !errors.As(err, &nfe) {
+		t.Fatalf("expected *notFoundError, got %T: %v", err, err)
+	}
+	if nfe.entity != entity {
+		t.Errorf("notFoundError.entity = %q, want %q", nfe.entity, entity)
+	}
+	if nfe.id != id {
+		t.Errorf("notFoundError.id = %q, want %q", nfe.id, id)
+	}
+}
+
+func TestTaskShow_NotFound(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("tnf-proj")
+	err := e.runExpectErr("task", "show", "deadbeef", "--project", pid)
+	assertNotFound(t, err, "task", "deadbeef")
+}
+
+func TestTaskUpdate_NotFound(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("tunf-proj")
+	err := e.runExpectErr("task", "update", "deadbeef", "--status", "done", "--project", pid)
+	assertNotFound(t, err, "task", "deadbeef")
+}
+
+func TestTaskDelete_NotFound(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("tdnf-proj")
+	err := e.runExpectErr("task", "delete", "deadbeef", "--project", pid)
+	assertNotFound(t, err, "task", "deadbeef")
+}
+
+func TestTaskDone_NotFound(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("tdonf-proj")
+	err := e.runExpectErr("task", "done", "deadbeef", "--project", pid)
+	assertNotFound(t, err, "task", "deadbeef")
+}
+
+func TestTaskNote_NotFound(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("tnotenf-proj")
+	err := e.runExpectErr("task", "note", "deadbeef", "some note", "--project", pid)
+	assertNotFound(t, err, "task", "deadbeef")
+}
+
+func TestTaskAdd_FeatureNotFound(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("tafnf-proj")
+	err := e.runExpectErr("task", "add", "my-task", "--feature", "deadbeef", "--project", pid)
+	assertNotFound(t, err, "feature", "deadbeef")
+}
+
+func TestFeatureShow_NotFound(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("fsnf-proj")
+	err := e.runExpectErr("feature", "show", "deadbeef", "--project", pid)
+	assertNotFound(t, err, "feature", "deadbeef")
+}
+
+func TestFeatureUpdate_NotFound(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("funf-proj")
+	err := e.runExpectErr("feature", "update", "deadbeef", "--status", "done", "--project", pid)
+	assertNotFound(t, err, "feature", "deadbeef")
+}
+
+func TestFeatureDelete_NotFound(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("fdnf-proj")
+	err := e.runExpectErr("feature", "delete", "deadbeef", "--project", pid)
+	assertNotFound(t, err, "feature", "deadbeef")
+}
+
+func TestFeatureNote_NotFound(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("fnotenf-proj")
+	err := e.runExpectErr("feature", "note", "deadbeef", "some note", "--project", pid)
+	assertNotFound(t, err, "feature", "deadbeef")
+}
+
+func TestNotFoundError_Message(t *testing.T) {
+	err := notFoundErr("task", "abc12345")
+	want := "task not found: abc12345"
+	if err.Error() != want {
+		t.Errorf("error message = %q, want %q", err.Error(), want)
 	}
 }
