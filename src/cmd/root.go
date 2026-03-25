@@ -65,7 +65,24 @@ func printTable(w io.Writer, headers []string, rows [][]string) {
 	tw.Flush()
 }
 
-// exitNotFound prints a not-found error and exits with code 2.
+// notFoundError is returned when a requested entity does not exist.
+// Execute() uses this type to emit exit code 2 instead of the default 1.
+type notFoundError struct {
+	entity string
+	id     string
+}
+
+func (e *notFoundError) Error() string {
+	return fmt.Sprintf("%s not found: %s", e.entity, e.id)
+}
+
+// notFoundErr returns a *notFoundError for the given entity and id.
+func notFoundErr(entity, id string) error {
+	return &notFoundError{entity: entity, id: id}
+}
+
+// exitNotFound is deprecated: use return notFoundErr(...) instead.
+// Kept temporarily until all call sites are migrated.
 func exitNotFound(entity, id string) {
 	fmt.Fprintf(os.Stderr, "%s not found: %s\n", entity, id)
 	os.Exit(2)
