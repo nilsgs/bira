@@ -1,3 +1,5 @@
+![bira Logo](img/bira-logo_small.png)
+
 # bira
 
 AI-agent optimised CLI for project management. Tracks projects, features, and tasks with clean JSON output designed for programmatic consumption.
