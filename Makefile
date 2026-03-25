@@ -4,7 +4,7 @@ VERSION = $(shell cat VERSION)
 COMMIT  = $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 LDFLAGS = -s -w -X bira/cmd.version=$(VERSION) -X bira/cmd.commit=$(COMMIT)
 
-.PHONY: build install cross clean
+.PHONY: build install cross clean test test-local
 
 build:
 	cd $(SRC) && go build -ldflags "$(LDFLAGS)" -o ../$(BINARY).exe .
@@ -23,3 +23,9 @@ cross:
 clean:
 	rm -f $(BINARY).exe
 	rm -rf dist/
+
+test:
+	docker run --rm -v "$(CURDIR)/src:/app" -w /app golang:1.26 go test ./... -v -count=1
+
+test-local:
+	cd $(SRC) && go test ./... -v -count=1

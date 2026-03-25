@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -120,8 +121,8 @@ func runFeatureAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("save feature: %w", err)
 	}
 
-	output(&feature, func() {
-		fmt.Printf("Created feature %q (%s)\n", feature.Name, feature.ID)
+	output(cmd, &feature, func(w io.Writer) {
+		fmt.Fprintf(w, "Created feature %q (%s)\n", feature.Name, feature.ID)
 	})
 	return nil
 }
@@ -150,9 +151,9 @@ func runFeatureList(cmd *cobra.Command, args []string) error {
 		features = filtered
 	}
 
-	output(features, func() {
+	output(cmd, features, func(w io.Writer) {
 		if len(features) == 0 {
-			fmt.Println("No features found.")
+			fmt.Fprintln(w, "No features found.")
 			return
 		}
 		headers := []string{"ID", "NAME", "STATUS", "ASSIGNED", "BACKLOG"}
@@ -164,7 +165,7 @@ func runFeatureList(cmd *cobra.Command, args []string) error {
 			}
 			rows = append(rows, []string{f.ID, f.Name, f.Status, f.AssignedTo, bl})
 		}
-		printTable(headers, rows)
+		printTable(w, headers, rows)
 	})
 	return nil
 }
@@ -182,22 +183,22 @@ func runFeatureShow(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	output(feature, func() {
-		fmt.Printf("ID:          %s\n", feature.ID)
-		fmt.Printf("Name:        %s\n", feature.Name)
-		fmt.Printf("Status:      %s\n", feature.Status)
+	output(cmd, feature, func(w io.Writer) {
+		fmt.Fprintf(w, "ID:          %s\n", feature.ID)
+		fmt.Fprintf(w, "Name:        %s\n", feature.Name)
+		fmt.Fprintf(w, "Status:      %s\n", feature.Status)
 		if feature.Description != "" {
-			fmt.Printf("Description: %s\n", feature.Description)
+			fmt.Fprintf(w, "Description: %s\n", feature.Description)
 		}
 		if feature.AssignedTo != "" {
-			fmt.Printf("Assigned:    %s\n", feature.AssignedTo)
+			fmt.Fprintf(w, "Assigned:    %s\n", feature.AssignedTo)
 		}
 		if len(feature.Tags) > 0 {
-			fmt.Printf("Tags:        %s\n", strings.Join(feature.Tags, ", "))
+			fmt.Fprintf(w, "Tags:        %s\n", strings.Join(feature.Tags, ", "))
 		}
-		fmt.Printf("Backlog:     %v\n", feature.IsBacklog)
-		fmt.Printf("Created:     %s\n", feature.CreatedAt.Format("2006-01-02 15:04:05"))
-		fmt.Printf("Updated:     %s\n", feature.UpdatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(w, "Backlog:     %v\n", feature.IsBacklog)
+		fmt.Fprintf(w, "Created:     %s\n", feature.CreatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(w, "Updated:     %s\n", feature.UpdatedAt.Format("2006-01-02 15:04:05"))
 	})
 	return nil
 }
@@ -248,8 +249,8 @@ func runFeatureUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("save feature: %w", err)
 	}
 
-	output(feature, func() {
-		fmt.Printf("Updated feature %q (%s)\n", feature.Name, feature.ID)
+	output(cmd, feature, func(w io.Writer) {
+		fmt.Fprintf(w, "Updated feature %q (%s)\n", feature.Name, feature.ID)
 	})
 	return nil
 }
@@ -287,8 +288,8 @@ func runFeatureDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("delete feature: %w", err)
 	}
 
-	output(feature, func() {
-		fmt.Printf("Deleted feature %q (%s)\n", feature.Name, feature.ID)
+	output(cmd, feature, func(w io.Writer) {
+		fmt.Fprintf(w, "Deleted feature %q (%s)\n", feature.Name, feature.ID)
 	})
 	return nil
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -93,9 +94,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("write .bira config: %w", err)
 	}
 
-	output(&project, func() {
-		fmt.Printf("Initialized project %q (%s)\n", name, projectID)
-		fmt.Printf("Config written to %s\n", filepath.Join(cwd, config.FileName))
+	output(cmd, &project, func(w io.Writer) {
+		fmt.Fprintf(w, "Initialized project %q (%s)\n", name, projectID)
+		fmt.Fprintf(w, "Config written to %s\n", filepath.Join(cwd, config.FileName))
 	})
 
 	return nil

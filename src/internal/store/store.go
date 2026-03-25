@@ -7,8 +7,12 @@ import (
 	"path/filepath"
 )
 
-// DataDir returns the resolved path to ~/.bira.
+// DataDir returns the resolved path to the bira data directory.
+// If BIRA_HOME is set, it is used directly; otherwise ~/.bira is returned.
 func DataDir() (string, error) {
+	if h := os.Getenv("BIRA_HOME"); h != "" {
+		return h, nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("cannot determine home directory: %w", err)

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 
 	"bira/internal/models"
 
@@ -96,23 +97,23 @@ func runContext(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	output(ctx, func() {
-		fmt.Printf("Project: %s (%s)\n", ctx.ProjectName, ctx.ProjectID)
-		fmt.Printf("Open tasks: %d\n", ctx.OpenTaskCount)
+	output(cmd, ctx, func(w io.Writer) {
+		fmt.Fprintf(w, "Project: %s (%s)\n", ctx.ProjectName, ctx.ProjectID)
+		fmt.Fprintf(w, "Open tasks: %d\n", ctx.OpenTaskCount)
 		if contextFull && len(ctx.Features) > 0 {
-			fmt.Println()
+			fmt.Fprintln(w)
 			for _, f := range ctx.Features {
 				label := f.Name
 				if f.IsBacklog {
 					label += " (backlog)"
 				}
-				fmt.Printf("  Feature: %s [%s] (%s)\n", label, f.Status, f.ID)
+				fmt.Fprintf(w, "  Feature: %s [%s] (%s)\n", label, f.Status, f.ID)
 				if len(f.Tasks) > 0 {
 					for status, count := range f.Tasks {
-						fmt.Printf("    %s: %d\n", status, count)
+						fmt.Fprintf(w, "    %s: %d\n", status, count)
 					}
 				} else {
-					fmt.Printf("    (no tasks)\n")
+					fmt.Fprintf(w, "    (no tasks)\n")
 				}
 			}
 		}

@@ -214,6 +214,34 @@ make cross          # all 6 targets (linux/darwin/windows × amd64/arm64) → di
 make clean
 ```
 
+### Test
+
+The test suite includes unit tests (store, config) and integration tests (command layer). All tests use isolated environments via `BIRA_HOME` — each test gets its own temp directory for data storage.
+
+```sh
+make test-local     # native go test (Windows/Linux/macOS)
+make test           # run in Docker container (golang:1.26)
+```
+
+**Native test run:**
+```sh
+cd src && go test ./... -v -count=1
+```
+
+**Verify coverage:**
+
+All output functions have been instrumented to accept `io.Writer` for clean testing. This enables:
+- Unit tests to capture command output to buffers
+- No file system pollution (each test uses `t.TempDir()` + `BIRA_HOME`)
+- Sequential test execution (safe because `rootCmd` is process-wide)
+
+**Test breakdown:**
+- `internal/store` — 9 tests (storage layer, file ops, BIRA_HOME env var)
+- `internal/config` — 6 tests (config discovery, project ID resolution)
+- `cmd` — 13 integration tests (init, features, tasks, context, JSON output)
+
+**Total: 28 tests, all passing.**
+
 ### Bump version
 
 Edit [VERSION](VERSION) (single line, semver):

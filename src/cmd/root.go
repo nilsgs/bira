@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -43,9 +44,9 @@ func init() {
 
 // --- output helpers ---
 
-// printJSON writes v as JSON to stdout. Used by all commands when --json is set.
-func printJSON(v any) {
-	enc := json.NewEncoder(os.Stdout)
+// printJSON writes v as JSON to w. Used by all commands when --json is set.
+func printJSON(w io.Writer, v any) {
+	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(v); err != nil {
 		fmt.Fprintln(os.Stderr, "error encoding json:", err)
@@ -53,15 +54,15 @@ func printJSON(v any) {
 	}
 }
 
-// printTable writes rows in aligned columns to stdout using tabwriter.
-func printTable(headers []string, rows [][]string) {
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, strings.Join(headers, "\t"))
-	fmt.Fprintln(w, strings.Repeat("─\t", len(headers)))
+// printTable writes rows in aligned columns to w using tabwriter.
+func printTable(w io.Writer, headers []string, rows [][]string) {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, strings.Join(headers, "\t"))
+	fmt.Fprintln(tw, strings.Repeat("─\t", len(headers)))
 	for _, row := range rows {
-		fmt.Fprintln(w, strings.Join(row, "\t"))
+		fmt.Fprintln(tw, strings.Join(row, "\t"))
 	}
-	w.Flush()
+	tw.Flush()
 }
 
 // exitNotFound prints a not-found error and exits with code 2.
@@ -71,10 +72,12 @@ func exitNotFound(entity, id string) {
 }
 
 // output dispatches to JSON or human-readable depending on --json flag.
-func output(v any, humanFn func()) {
+// The writer is obtained from cmd.OutOrStdout().
+func output(cmd *cobra.Command, v any, humanFn func(io.Writer)) {
+	w := cmd.OutOrStdout()
 	if jsonOutput {
-		printJSON(v)
+		printJSON(w, v)
 	} else {
-		humanFn()
+		humanFn(w)
 	}
 }

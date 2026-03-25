@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -152,8 +153,8 @@ func runTaskAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("save task: %w", err)
 	}
 
-	output(&task, func() {
-		fmt.Printf("Created task %q (%s) in feature %s\n", task.Title, task.ID, task.FeatureID)
+	output(cmd, &task, func(w io.Writer) {
+		fmt.Fprintf(w, "Created task %q (%s) in feature %s\n", task.Title, task.ID, task.FeatureID)
 	})
 	return nil
 }
@@ -192,9 +193,9 @@ func runTaskList(cmd *cobra.Command, args []string) error {
 		tasks = filtered
 	}
 
-	output(tasks, func() {
+	output(cmd, tasks, func(w io.Writer) {
 		if len(tasks) == 0 {
-			fmt.Println("No tasks found.")
+			fmt.Fprintln(w, "No tasks found.")
 			return
 		}
 		headers := []string{"ID", "TITLE", "STATUS", "FEATURE", "ASSIGNED"}
@@ -202,7 +203,7 @@ func runTaskList(cmd *cobra.Command, args []string) error {
 		for _, t := range tasks {
 			rows = append(rows, []string{t.ID, t.Title, t.Status, t.FeatureID, t.AssignedTo})
 		}
-		printTable(headers, rows)
+		printTable(w, headers, rows)
 	})
 	return nil
 }
@@ -220,25 +221,25 @@ func runTaskShow(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	output(task, func() {
-		fmt.Printf("ID:          %s\n", task.ID)
-		fmt.Printf("Title:       %s\n", task.Title)
-		fmt.Printf("Status:      %s\n", task.Status)
-		fmt.Printf("Feature:     %s\n", task.FeatureID)
+	output(cmd, task, func(w io.Writer) {
+		fmt.Fprintf(w, "ID:          %s\n", task.ID)
+		fmt.Fprintf(w, "Title:       %s\n", task.Title)
+		fmt.Fprintf(w, "Status:      %s\n", task.Status)
+		fmt.Fprintf(w, "Feature:     %s\n", task.FeatureID)
 		if task.Description != "" {
-			fmt.Printf("Description: %s\n", task.Description)
+			fmt.Fprintf(w, "Description: %s\n", task.Description)
 		}
 		if task.AssignedTo != "" {
-			fmt.Printf("Assigned:    %s\n", task.AssignedTo)
+			fmt.Fprintf(w, "Assigned:    %s\n", task.AssignedTo)
 		}
 		if len(task.Tags) > 0 {
-			fmt.Printf("Tags:        %s\n", strings.Join(task.Tags, ", "))
+			fmt.Fprintf(w, "Tags:        %s\n", strings.Join(task.Tags, ", "))
 		}
 		if len(task.DependsOn) > 0 {
-			fmt.Printf("Depends on:  %s\n", strings.Join(task.DependsOn, ", "))
+			fmt.Fprintf(w, "Depends on:  %s\n", strings.Join(task.DependsOn, ", "))
 		}
-		fmt.Printf("Created:     %s\n", task.CreatedAt.Format("2006-01-02 15:04:05"))
-		fmt.Printf("Updated:     %s\n", task.UpdatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(w, "Created:     %s\n", task.CreatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(w, "Updated:     %s\n", task.UpdatedAt.Format("2006-01-02 15:04:05"))
 	})
 	return nil
 }
@@ -292,8 +293,8 @@ func runTaskUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("save task: %w", err)
 	}
 
-	output(task, func() {
-		fmt.Printf("Updated task %q (%s)\n", task.Title, task.ID)
+	output(cmd, task, func(w io.Writer) {
+		fmt.Fprintf(w, "Updated task %q (%s)\n", task.Title, task.ID)
 	})
 	return nil
 }
@@ -327,8 +328,8 @@ func runTaskDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("delete task: %w", err)
 	}
 
-	output(task, func() {
-		fmt.Printf("Deleted task %q (%s)\n", task.Title, task.ID)
+	output(cmd, task, func(w io.Writer) {
+		fmt.Fprintf(w, "Deleted task %q (%s)\n", task.Title, task.ID)
 	})
 	return nil
 }
@@ -365,8 +366,8 @@ func runTaskDone(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("save task: %w", err)
 	}
 
-	output(task, func() {
-		fmt.Printf("Marked task %q (%s) as done\n", task.Title, task.ID)
+	output(cmd, task, func(w io.Writer) {
+		fmt.Fprintf(w, "Marked task %q (%s) as done\n", task.Title, task.ID)
 	})
 	return nil
 }

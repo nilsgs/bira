@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,9 +67,9 @@ func runProjectList(cmd *cobra.Command, args []string) error {
 		projects = append(projects, p)
 	}
 
-	output(projects, func() {
+	output(cmd, projects, func(w io.Writer) {
 		if len(projects) == 0 {
-			fmt.Println("No projects found. Run 'bira init' in a repository.")
+			fmt.Fprintln(w, "No projects found. Run 'bira init' in a repository.")
 			return
 		}
 		headers := []string{"ID", "NAME", "REPO PATH"}
@@ -76,7 +77,7 @@ func runProjectList(cmd *cobra.Command, args []string) error {
 		for _, p := range projects {
 			rows = append(rows, []string{p.ID, p.Name, p.RepoPath})
 		}
-		printTable(headers, rows)
+		printTable(w, headers, rows)
 	})
 	return nil
 }
@@ -101,18 +102,18 @@ func runProjectShow(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	output(project, func() {
-		fmt.Printf("ID:          %s\n", project.ID)
-		fmt.Printf("Name:        %s\n", project.Name)
+	output(cmd, project, func(w io.Writer) {
+		fmt.Fprintf(w, "ID:          %s\n", project.ID)
+		fmt.Fprintf(w, "Name:        %s\n", project.Name)
 		if project.Description != "" {
-			fmt.Printf("Description: %s\n", project.Description)
+			fmt.Fprintf(w, "Description: %s\n", project.Description)
 		}
-		fmt.Printf("Repo:        %s\n", project.RepoPath)
+		fmt.Fprintf(w, "Repo:        %s\n", project.RepoPath)
 		if len(project.Tags) > 0 {
-			fmt.Printf("Tags:        %s\n", strings.Join(project.Tags, ", "))
+			fmt.Fprintf(w, "Tags:        %s\n", strings.Join(project.Tags, ", "))
 		}
-		fmt.Printf("Created:     %s\n", project.CreatedAt.Format("2006-01-02 15:04:05"))
-		fmt.Printf("Updated:     %s\n", project.UpdatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(w, "Created:     %s\n", project.CreatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(w, "Updated:     %s\n", project.UpdatedAt.Format("2006-01-02 15:04:05"))
 	})
 	return nil
 }
@@ -140,8 +141,8 @@ func runProjectDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("delete project directory: %w", err)
 	}
 
-	output(project, func() {
-		fmt.Printf("Deleted project %q (%s)\n", project.Name, project.ID)
+	output(cmd, project, func(w io.Writer) {
+		fmt.Fprintf(w, "Deleted project %q (%s)\n", project.Name, project.ID)
 	})
 	return nil
 }
