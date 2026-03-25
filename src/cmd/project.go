@@ -13,37 +13,35 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var projectCmd = &cobra.Command{
-	Use:   "project",
-	Short: "Manage projects",
-}
+func newProjectCmd() *cobra.Command {
+	projectCmd := &cobra.Command{
+		Use:   "project",
+		Short: "Manage projects",
+	}
 
-var projectListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all projects",
-	RunE:  runProjectList,
-}
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all projects",
+		RunE:  runProjectList,
+	}
 
-var projectShowCmd = &cobra.Command{
-	Use:   "show [id]",
-	Short: "Show project details",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runProjectShow,
-}
+	showCmd := &cobra.Command{
+		Use:   "show [id]",
+		Short: "Show project details",
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  runProjectShow,
+	}
 
-var projectDeleteYes bool
+	deleteCmd := &cobra.Command{
+		Use:   "delete <id>",
+		Short: "Delete a project and all its data",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runProjectDelete,
+	}
+	deleteCmd.Flags().Bool("yes", false, "confirm deletion without prompt")
 
-var projectDeleteCmd = &cobra.Command{
-	Use:   "delete <id>",
-	Short: "Delete a project and all its data",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runProjectDelete,
-}
-
-func init() {
-	projectDeleteCmd.Flags().BoolVar(&projectDeleteYes, "yes", false, "confirm deletion without prompt")
-	projectCmd.AddCommand(projectListCmd, projectShowCmd, projectDeleteCmd)
-	rootCmd.AddCommand(projectCmd)
+	projectCmd.AddCommand(listCmd, showCmd, deleteCmd)
+	return projectCmd
 }
 
 func runProjectList(cmd *cobra.Command, args []string) error {
@@ -88,7 +86,7 @@ func runProjectShow(cmd *cobra.Command, args []string) error {
 		id = args[0]
 	} else {
 		var err error
-		id, err = resolveProject()
+		id, err = resolveProject(cmd)
 		if err != nil {
 			return err
 		}
@@ -121,7 +119,8 @@ func runProjectShow(cmd *cobra.Command, args []string) error {
 func runProjectDelete(cmd *cobra.Command, args []string) error {
 	id := args[0]
 
-	if !projectDeleteYes {
+	yes, _ := cmd.Flags().GetBool("yes")
+	if !yes {
 		return fmt.Errorf("project delete is destructive; pass --yes to confirm")
 	}
 
@@ -149,12 +148,11 @@ func runProjectDelete(cmd *cobra.Command, args []string) error {
 
 // --- helpers ---
 
-func resolveProject() (string, error) {
-	return resolveProjectID()
-}
-
-func resolveProjectID() (string, error) {
-	return resolveProjectIDFromFlag(projectFlag)
+// resolveProject reads the --project persistent flag from cmd and resolves it
+// to a project ID, falling back to .bira walk-up discovery if not set.
+func resolveProject(cmd *cobra.Command) (string, error) {
+	flag, _ := cmd.Root().PersistentFlags().GetString("project")
+	return resolveProjectIDFromFlag(flag)
 }
 
 func resolveProjectIDFromFlag(flag string) (string, error) {

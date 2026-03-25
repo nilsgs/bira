@@ -14,93 +14,87 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var featureCmd = &cobra.Command{
-	Use:   "feature",
-	Short: "Manage features",
-}
+func newFeatureCmd() *cobra.Command {
+	featureCmd := &cobra.Command{
+		Use:   "feature",
+		Short: "Manage features",
+	}
 
-// --- add ---
+	// --- add ---
 
-var featureAddDesc, featureAddAssign, featureAddTags string
+	addCmd := &cobra.Command{
+		Use:   "add <name>",
+		Short: "Create a new feature",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runFeatureAdd,
+	}
+	addCmd.Flags().String("desc", "", "feature description")
+	addCmd.Flags().String("assign", "", "assigned agent/user")
+	addCmd.Flags().String("tags", "", "comma-separated tags")
 
-var featureAddCmd = &cobra.Command{
-	Use:   "add <name>",
-	Short: "Create a new feature",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runFeatureAdd,
-}
+	// --- list ---
 
-// --- list ---
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List features in the current project",
+		RunE:  runFeatureList,
+	}
+	listCmd.Flags().String("status", "", "filter by status")
 
-var featureListStatus string
+	// --- show ---
 
-var featureListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List features in the current project",
-	RunE:  runFeatureList,
-}
+	showCmd := &cobra.Command{
+		Use:   "show <id>",
+		Short: "Show feature details",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runFeatureShow,
+	}
 
-// --- show ---
+	// --- update ---
 
-var featureShowCmd = &cobra.Command{
-	Use:   "show <id>",
-	Short: "Show feature details",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runFeatureShow,
-}
+	updateCmd := &cobra.Command{
+		Use:   "update <id>",
+		Short: "Update a feature",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runFeatureUpdate,
+	}
+	updateCmd.Flags().String("status", "", "new status")
+	updateCmd.Flags().String("desc", "", "new description")
+	updateCmd.Flags().String("assign", "", "new assignee")
+	updateCmd.Flags().String("tags", "", "new comma-separated tags")
 
-// --- update ---
+	// --- delete ---
 
-var featureUpdateStatus, featureUpdateDesc, featureUpdateAssign, featureUpdateTags string
+	deleteCmd := &cobra.Command{
+		Use:   "delete <id>",
+		Short: "Delete a feature",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runFeatureDelete,
+	}
 
-var featureUpdateCmd = &cobra.Command{
-	Use:   "update <id>",
-	Short: "Update a feature",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runFeatureUpdate,
-}
+	// --- note ---
 
-// --- delete ---
+	noteCmd := &cobra.Command{
+		Use:   "note <id> <message>",
+		Short: "Append a note to a feature",
+		Args:  cobra.ExactArgs(2),
+		RunE:  runFeatureNote,
+	}
 
-var featureDeleteCmd = &cobra.Command{
-	Use:   "delete <id>",
-	Short: "Delete a feature",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runFeatureDelete,
-}
-
-// --- note ---
-
-var featureNoteCmd = &cobra.Command{
-	Use:   "note <id> <message>",
-	Short: "Append a note to a feature",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runFeatureNote,
-}
-
-func init() {
-	featureAddCmd.Flags().StringVar(&featureAddDesc, "desc", "", "feature description")
-	featureAddCmd.Flags().StringVar(&featureAddAssign, "assign", "", "assigned agent/user")
-	featureAddCmd.Flags().StringVar(&featureAddTags, "tags", "", "comma-separated tags")
-
-	featureListCmd.Flags().StringVar(&featureListStatus, "status", "", "filter by status")
-
-	featureUpdateCmd.Flags().StringVar(&featureUpdateStatus, "status", "", "new status")
-	featureUpdateCmd.Flags().StringVar(&featureUpdateDesc, "desc", "", "new description")
-	featureUpdateCmd.Flags().StringVar(&featureUpdateAssign, "assign", "", "new assignee")
-	featureUpdateCmd.Flags().StringVar(&featureUpdateTags, "tags", "", "new comma-separated tags")
-
-	featureCmd.AddCommand(featureAddCmd, featureListCmd, featureShowCmd, featureUpdateCmd, featureDeleteCmd, featureNoteCmd)
-	rootCmd.AddCommand(featureCmd)
+	featureCmd.AddCommand(addCmd, listCmd, showCmd, updateCmd, deleteCmd, noteCmd)
+	return featureCmd
 }
 
 // --- implementations ---
 
 func runFeatureAdd(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject()
+	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}
+	featureAddDesc, _ := cmd.Flags().GetString("desc")
+	featureAddAssign, _ := cmd.Flags().GetString("assign")
+	featureAddTags, _ := cmd.Flags().GetString("tags")
 	projectDir, err := store.ProjectDir(projectID)
 	if err != nil {
 		return err
@@ -137,10 +131,11 @@ func runFeatureAdd(cmd *cobra.Command, args []string) error {
 }
 
 func runFeatureList(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject()
+	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}
+	featureListStatus, _ := cmd.Flags().GetString("status")
 
 	features, err := loadAllFeatures(projectID)
 	if err != nil {
@@ -180,7 +175,7 @@ func runFeatureList(cmd *cobra.Command, args []string) error {
 }
 
 func runFeatureShow(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject()
+	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}
@@ -219,10 +214,14 @@ func runFeatureShow(cmd *cobra.Command, args []string) error {
 }
 
 func runFeatureUpdate(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject()
+	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}
+	featureUpdateStatus, _ := cmd.Flags().GetString("status")
+	featureUpdateDesc, _ := cmd.Flags().GetString("desc")
+	featureUpdateAssign, _ := cmd.Flags().GetString("assign")
+	featureUpdateTags, _ := cmd.Flags().GetString("tags")
 	projectDir, err := store.ProjectDir(projectID)
 	if err != nil {
 		return err
@@ -271,7 +270,7 @@ func runFeatureUpdate(cmd *cobra.Command, args []string) error {
 }
 
 func runFeatureDelete(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject()
+	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}
@@ -312,7 +311,7 @@ func runFeatureDelete(cmd *cobra.Command, args []string) error {
 // --- helpers ---
 
 func runFeatureNote(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject()
+	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}

@@ -16,21 +16,37 @@ var (
 	// Set via -ldflags at build time.
 	version = "dev"
 	commit  = "none"
-
-	jsonOutput  bool
-	projectFlag string
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "bira",
-	Short: "AI-agent optimised project management CLI",
-	Long:  "bira tracks projects, features, and tasks. Designed for AI agents with structured JSON output.",
-	SilenceUsage:  true,
-	SilenceErrors: true,
+// NewRootCmd builds and returns a fresh root command with all subcommands
+// registered. Every call returns an independent instance with no shared state,
+// so it is safe to call multiple times in the same process (e.g. in tests).
+func NewRootCmd() *cobra.Command {
+	root := &cobra.Command{
+		Use:           "bira",
+		Short:         "AI-agent optimised project management CLI",
+		Long:          "bira tracks projects, features, and tasks. Designed for AI agents with structured JSON output.",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	root.Version = version + "+" + commit
+	root.SetVersionTemplate("{{.Version}}\n")
+	root.PersistentFlags().Bool("json", false, "output JSON instead of table format")
+	root.PersistentFlags().String("project", "", "override project context (default: read from .bira)")
+
+	root.AddCommand(
+		newInitCmd(),
+		newContextCmd(),
+		newProjectCmd(),
+		newFeatureCmd(),
+		newTaskCmd(),
+	)
+	return root
 }
 
+// Execute builds a fresh command tree and runs it.
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
+	if err := NewRootCmd().Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		var nfe *notFoundError
 		if errors.As(err, &nfe) {
@@ -38,13 +54,6 @@ func Execute() {
 		}
 		os.Exit(1)
 	}
-}
-
-func init() {
-	rootCmd.Version = version + "+" + commit
-	rootCmd.SetVersionTemplate("{{.Version}}\n")
-	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "output JSON instead of table format")
-	rootCmd.PersistentFlags().StringVar(&projectFlag, "project", "", "override project context (default: read from .bira)")
 }
 
 // --- output helpers ---
@@ -86,15 +95,16 @@ func notFoundErr(entity, id string) error {
 	return &notFoundError{entity: entity, id: id}
 }
 
-
-
 // output dispatches to JSON or human-readable depending on --json flag.
-// The writer is obtained from cmd.OutOrStdout().
+// It reads the flag value from cmd's inherited persistent flags so that no
+// package-level state is required.
 func output(cmd *cobra.Command, v any, humanFn func(io.Writer)) {
 	w := cmd.OutOrStdout()
-	if jsonOutput {
+	jsonOut, _ := cmd.Root().PersistentFlags().GetBool("json")
+	if jsonOut {
 		printJSON(w, v)
 	} else {
 		humanFn(w)
 	}
 }
+

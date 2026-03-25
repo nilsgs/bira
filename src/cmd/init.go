@@ -14,21 +14,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var initName string
-
-var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initialize a bira project in the current directory",
-	Long:  "Creates a new project, writes a .bira config file, and sets up the project in ~/.bira.",
-	RunE:  runInit,
-}
-
-func init() {
-	initCmd.Flags().StringVar(&initName, "name", "", "project name (default: current directory name)")
-	rootCmd.AddCommand(initCmd)
+func newInitCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "init",
+		Short: "Initialize a bira project in the current directory",
+		Long:  "Creates a new project, writes a .bira config file, and sets up the project in ~/.bira.",
+		RunE:  runInit,
+	}
+	cmd.Flags().String("name", "", "project name (default: current directory name)")
+	return cmd
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
+	initName, _ := cmd.Flags().GetString("name")
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("get working directory: %w", err)

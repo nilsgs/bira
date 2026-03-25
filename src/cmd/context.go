@@ -9,18 +9,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var contextFull bool
-
-var contextCmd = &cobra.Command{
-	Use:   "context",
-	Short: "Show current project context",
-	Long:  "Dumps the current project context. Use --full for a detailed breakdown of features and tasks by status.",
-	RunE:  runContext,
-}
-
-func init() {
-	contextCmd.Flags().BoolVar(&contextFull, "full", false, "show full breakdown of features and tasks by status")
-	rootCmd.AddCommand(contextCmd)
+func newContextCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "context",
+		Short: "Show current project context",
+		Long:  "Dumps the current project context. Use --full for a detailed breakdown of features and tasks by status.",
+		RunE:  runContext,
+	}
+	cmd.Flags().Bool("full", false, "show full breakdown of features and tasks by status")
+	return cmd
 }
 
 type contextOutput struct {
@@ -39,7 +36,8 @@ type featureSummary struct {
 }
 
 func runContext(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject()
+	contextFull, _ := cmd.Flags().GetBool("full")
+	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}

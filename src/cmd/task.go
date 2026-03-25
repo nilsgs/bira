@@ -14,114 +14,108 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var taskCmd = &cobra.Command{
-	Use:   "task",
-	Short: "Manage tasks",
-}
+func newTaskCmd() *cobra.Command {
+	taskCmd := &cobra.Command{
+		Use:   "task",
+		Short: "Manage tasks",
+	}
 
-// --- add ---
+	// --- add ---
 
-var taskAddFeature, taskAddDesc, taskAddAssign, taskAddTags, taskAddDependsOn string
-var taskAddCriteria []string
-var taskAddFiles string
+	addCmd := &cobra.Command{
+		Use:   "add <title>",
+		Short: "Create a new task",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runTaskAdd,
+	}
+	addCmd.Flags().String("feature", "", "parent feature ID (default: backlog)")
+	addCmd.Flags().String("desc", "", "task description")
+	addCmd.Flags().String("assign", "", "assigned agent/user")
+	addCmd.Flags().String("tags", "", "comma-separated tags")
+	addCmd.Flags().String("depends-on", "", "comma-separated task IDs this depends on")
+	addCmd.Flags().StringArray("criteria", nil, "acceptance criterion (repeatable)")
+	addCmd.Flags().String("files", "", "comma-separated file references")
 
-var taskAddCmd = &cobra.Command{
-	Use:   "add <title>",
-	Short: "Create a new task",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTaskAdd,
-}
+	// --- list ---
 
-// --- list ---
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List tasks in the current project",
+		RunE:  runTaskList,
+	}
+	listCmd.Flags().String("feature", "", "filter by feature ID")
+	listCmd.Flags().String("status", "", "filter by status")
 
-var taskListFeature, taskListStatus string
+	// --- show ---
 
-var taskListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List tasks in the current project",
-	RunE:  runTaskList,
-}
+	showCmd := &cobra.Command{
+		Use:   "show <id>",
+		Short: "Show task details",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runTaskShow,
+	}
 
-// --- show ---
+	// --- update ---
 
-var taskShowCmd = &cobra.Command{
-	Use:   "show <id>",
-	Short: "Show task details",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTaskShow,
-}
+	updateCmd := &cobra.Command{
+		Use:   "update <id>",
+		Short: "Update a task",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runTaskUpdate,
+	}
+	updateCmd.Flags().String("status", "", "new status")
+	updateCmd.Flags().String("desc", "", "new description")
+	updateCmd.Flags().String("assign", "", "new assignee")
+	updateCmd.Flags().String("tags", "", "new comma-separated tags")
+	updateCmd.Flags().String("depends-on", "", "new comma-separated dependency IDs")
+	updateCmd.Flags().StringArray("criteria", nil, "acceptance criteria, replaces existing (repeatable)")
+	updateCmd.Flags().String("files", "", "new comma-separated file references")
 
-// --- update ---
+	// --- delete ---
 
-var taskUpdateStatus, taskUpdateDesc, taskUpdateAssign, taskUpdateTags, taskUpdateDependsOn string
-var taskUpdateCriteria []string
-var taskUpdateFiles string
+	deleteCmd := &cobra.Command{
+		Use:   "delete <id>",
+		Short: "Delete a task",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runTaskDelete,
+	}
 
-var taskUpdateCmd = &cobra.Command{
-	Use:   "update <id>",
-	Short: "Update a task",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTaskUpdate,
-}
+	// --- note ---
 
-// --- delete ---
+	noteCmd := &cobra.Command{
+		Use:   "note <id> <message>",
+		Short: "Append a note to a task",
+		Args:  cobra.ExactArgs(2),
+		RunE:  runTaskNote,
+	}
 
-var taskDeleteCmd = &cobra.Command{
-	Use:   "delete <id>",
-	Short: "Delete a task",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTaskDelete,
-}
+	// --- done ---
 
-// --- note ---
+	doneCmd := &cobra.Command{
+		Use:   "done <id>",
+		Short: "Mark a task as done",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runTaskDone,
+	}
 
-var taskNoteCmd = &cobra.Command{
-	Use:   "note <id> <message>",
-	Short: "Append a note to a task",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runTaskNote,
-}
-
-// --- done ---
-
-var taskDoneCmd = &cobra.Command{
-	Use:   "done <id>",
-	Short: "Mark a task as done",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTaskDone,
-}
-
-func init() {
-	taskAddCmd.Flags().StringVar(&taskAddFeature, "feature", "", "parent feature ID (default: backlog)")
-	taskAddCmd.Flags().StringVar(&taskAddDesc, "desc", "", "task description")
-	taskAddCmd.Flags().StringVar(&taskAddAssign, "assign", "", "assigned agent/user")
-	taskAddCmd.Flags().StringVar(&taskAddTags, "tags", "", "comma-separated tags")
-	taskAddCmd.Flags().StringVar(&taskAddDependsOn, "depends-on", "", "comma-separated task IDs this depends on")
-	taskAddCmd.Flags().StringArrayVar(&taskAddCriteria, "criteria", nil, "acceptance criterion (repeatable)")
-	taskAddCmd.Flags().StringVar(&taskAddFiles, "files", "", "comma-separated file references")
-
-	taskListCmd.Flags().StringVar(&taskListFeature, "feature", "", "filter by feature ID")
-	taskListCmd.Flags().StringVar(&taskListStatus, "status", "", "filter by status")
-
-	taskUpdateCmd.Flags().StringVar(&taskUpdateStatus, "status", "", "new status")
-	taskUpdateCmd.Flags().StringVar(&taskUpdateDesc, "desc", "", "new description")
-	taskUpdateCmd.Flags().StringVar(&taskUpdateAssign, "assign", "", "new assignee")
-	taskUpdateCmd.Flags().StringVar(&taskUpdateTags, "tags", "", "new comma-separated tags")
-	taskUpdateCmd.Flags().StringVar(&taskUpdateDependsOn, "depends-on", "", "new comma-separated dependency IDs")
-	taskUpdateCmd.Flags().StringArrayVar(&taskUpdateCriteria, "criteria", nil, "acceptance criteria, replaces existing (repeatable)")
-	taskUpdateCmd.Flags().StringVar(&taskUpdateFiles, "files", "", "new comma-separated file references")
-
-	taskCmd.AddCommand(taskAddCmd, taskListCmd, taskShowCmd, taskUpdateCmd, taskDeleteCmd, taskNoteCmd, taskDoneCmd)
-	rootCmd.AddCommand(taskCmd)
+	taskCmd.AddCommand(addCmd, listCmd, showCmd, updateCmd, deleteCmd, noteCmd, doneCmd)
+	return taskCmd
 }
 
 // --- implementations ---
 
 func runTaskAdd(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject()
+	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}
+	taskAddFeature, _ := cmd.Flags().GetString("feature")
+	taskAddDesc, _ := cmd.Flags().GetString("desc")
+	taskAddAssign, _ := cmd.Flags().GetString("assign")
+	taskAddTags, _ := cmd.Flags().GetString("tags")
+	taskAddDependsOn, _ := cmd.Flags().GetString("depends-on")
+	taskAddCriteria, _ := cmd.Flags().GetStringArray("criteria")
+	taskAddFiles, _ := cmd.Flags().GetString("files")
 	projectDir, err := store.ProjectDir(projectID)
 	if err != nil {
 		return err
@@ -179,10 +173,12 @@ func runTaskAdd(cmd *cobra.Command, args []string) error {
 }
 
 func runTaskList(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject()
+	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}
+	taskListFeature, _ := cmd.Flags().GetString("feature")
+	taskListStatus, _ := cmd.Flags().GetString("status")
 
 	tasks, err := loadAllTasks(projectID)
 	if err != nil {
@@ -228,7 +224,7 @@ func runTaskList(cmd *cobra.Command, args []string) error {
 }
 
 func runTaskShow(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject()
+	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}
@@ -279,10 +275,17 @@ func runTaskShow(cmd *cobra.Command, args []string) error {
 }
 
 func runTaskUpdate(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject()
+	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}
+	taskUpdateStatus, _ := cmd.Flags().GetString("status")
+	taskUpdateDesc, _ := cmd.Flags().GetString("desc")
+	taskUpdateAssign, _ := cmd.Flags().GetString("assign")
+	taskUpdateTags, _ := cmd.Flags().GetString("tags")
+	taskUpdateDependsOn, _ := cmd.Flags().GetString("depends-on")
+	taskUpdateCriteria, _ := cmd.Flags().GetStringArray("criteria")
+	taskUpdateFiles, _ := cmd.Flags().GetString("files")
 	projectDir, err := store.ProjectDir(projectID)
 	if err != nil {
 		return err
@@ -340,7 +343,7 @@ func runTaskUpdate(cmd *cobra.Command, args []string) error {
 }
 
 func runTaskDelete(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject()
+	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}
@@ -375,7 +378,7 @@ func runTaskDelete(cmd *cobra.Command, args []string) error {
 }
 
 func runTaskDone(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject()
+	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}
@@ -415,7 +418,7 @@ func runTaskDone(cmd *cobra.Command, args []string) error {
 // --- helpers ---
 
 func runTaskNote(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject()
+	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}
