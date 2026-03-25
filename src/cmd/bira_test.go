@@ -28,45 +28,17 @@ func newTestEnv(t *testing.T) *testEnv {
 }
 
 // run executes a bira command line and returns captured stdout.
-// It resets rootCmd output and global flags before each invocation.
+// Each call creates a fresh command tree, so no global state can leak between invocations.
 func (e *testEnv) run(args ...string) string {
 	e.t.Helper()
 	e.out.Reset()
 
-	// Reset ALL package-level flag vars to defaults before every invocation.
-	jsonOutput = false
-	projectFlag = ""
-	initName = ""
-	taskAddFeature = ""
-	taskAddDesc = ""
-	taskAddAssign = ""
-	taskAddTags = ""
-	taskAddDependsOn = ""
-	taskAddCriteria = nil
-	taskAddFiles = ""
-	taskListFeature = ""
-	taskListStatus = ""
-	taskUpdateStatus = ""
-	taskUpdateDesc = ""
-	taskUpdateAssign = ""
-	taskUpdateTags = ""
-	taskUpdateDependsOn = ""
-	taskUpdateCriteria = nil
-	taskUpdateFiles = ""
-	featureAddDesc = ""
-	featureAddAssign = ""
-	featureAddTags = ""
-	featureListStatus = ""
-	featureUpdateStatus = ""
-	featureUpdateDesc = ""
-	featureUpdateAssign = ""
-	featureUpdateTags = ""
+	root := NewRootCmd()
+	root.SetOut(&e.out)
+	root.SetErr(&e.out)
+	root.SetArgs(args)
 
-	rootCmd.SetOut(&e.out)
-	rootCmd.SetErr(&e.out)
-	rootCmd.SetArgs(args)
-
-	if err := rootCmd.Execute(); err != nil {
+	if err := root.Execute(); err != nil {
 		e.t.Fatalf("bira %s: %v\noutput: %s", strings.Join(args, " "), err, e.out.String())
 	}
 	return e.out.String()
@@ -100,13 +72,11 @@ func TestInit(t *testing.T) {
 
 	// Second init should fail (already initialized)
 	e.out.Reset()
-	jsonOutput = false
-	projectFlag = ""
-	initName = ""
-	rootCmd.SetOut(&e.out)
-	rootCmd.SetErr(&e.out)
-	rootCmd.SetArgs([]string{"init", "--name", "dup"})
-	err := rootCmd.Execute()
+	root := NewRootCmd()
+	root.SetOut(&e.out)
+	root.SetErr(&e.out)
+	root.SetArgs([]string{"init", "--name", "dup"})
+	err := root.Execute()
 	if err == nil {
 		t.Fatal("expected error on double init")
 	}
@@ -442,39 +412,12 @@ func (e *testEnv) runExpectErr(args ...string) error {
 	e.t.Helper()
 	e.out.Reset()
 
-	jsonOutput = false
-	projectFlag = ""
-	initName = ""
-	taskAddFeature = ""
-	taskAddDesc = ""
-	taskAddAssign = ""
-	taskAddTags = ""
-	taskAddDependsOn = ""
-	taskAddCriteria = nil
-	taskAddFiles = ""
-	taskListFeature = ""
-	taskListStatus = ""
-	taskUpdateStatus = ""
-	taskUpdateDesc = ""
-	taskUpdateAssign = ""
-	taskUpdateTags = ""
-	taskUpdateDependsOn = ""
-	taskUpdateCriteria = nil
-	taskUpdateFiles = ""
-	featureAddDesc = ""
-	featureAddAssign = ""
-	featureAddTags = ""
-	featureListStatus = ""
-	featureUpdateStatus = ""
-	featureUpdateDesc = ""
-	featureUpdateAssign = ""
-	featureUpdateTags = ""
+	root := NewRootCmd()
+	root.SetOut(&e.out)
+	root.SetErr(&e.out)
+	root.SetArgs(args)
 
-	rootCmd.SetOut(&e.out)
-	rootCmd.SetErr(&e.out)
-	rootCmd.SetArgs(args)
-
-	return rootCmd.Execute()
+	return root.Execute()
 }
 
 // assertNotFound checks that err is a *notFoundError for the given entity and id.
