@@ -29,3 +29,6 @@ Thumbs.db
 
 # bira data (local config written by bira init)
 .bira
+
+# Skills
+!.agents/skills/**
