@@ -1,4 +1,4 @@
-![bira Logo](img/bira-logo_small.png)
+![bira Logo](img/bira_logo_small.png)
 
 # bira
 
