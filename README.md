@@ -1,4 +1,4 @@
-![bira Logo](img/bira-logo_small.png)
+![bira Logo](img/bira_logo_small.png)
 
 # bira
 
@@ -10,14 +10,14 @@ AI-agent optimised CLI for project management. Tracks projects, features, and ta
 
 ### Linux / macOS
 ```sh
-git clone https://github.com/yourorg/bira
+git clone https://github.com/nilsgs/bira
 cd bira
 ./install.sh
 ```
 
 ### Windows (PowerShell)
 ```powershell
-git clone https://github.com/yourorg/bira
+git clone https://github.com/nilsgs/bira
 cd bira
 .\install.ps1
 ```
