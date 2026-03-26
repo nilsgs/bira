@@ -10,7 +10,7 @@ work is untracked and untraceable — do not proceed past this section without c
 - [ ] `bira feature add` — feature created, ID captured
 - [ ] `git checkout -b feature/<id>-<name>` — branch created and checked out
 - [ ] `bira task add` × N — every planned task registered in bira, IDs captured
-- [ ] `findings/<id>-<name>.md` created from the template (can be mostly empty — fill as you go)
+- [ ] `findings/<id>-<name>.md` created — see the **findings skill** for template and guidance
 
 If any item is incomplete, do it now before touching source files.
 
@@ -53,10 +53,10 @@ bira task add "<another task>" --feature <feature-id> --json
 
 Capture task IDs as you work.
 
-Also create the findings file now:
+Also create the findings file now (see the **findings skill** for the template):
 
 ```bash
-# Create findings/<feature-id>-<short-name>.md from the template at the bottom of this document
+# touch findings/<feature-id>-<short-name>.md
 ```
 
 ### 4. Implement and Commit
@@ -135,15 +135,13 @@ For each completed task:
 
 ### 5. Document Findings
 
-As you work, capture findings in:
+Capture bira CLI observations (bugs, pain points, suggestions) as you work in:
 
 ```
 findings/<feature-id>-<short-name>.md
 ```
 
-Example path: `findings/f2e30189-auth-system.md`
-
-See [Findings Format](#findings-format) below.
+See the **findings skill** for the template and guidance.
 
 ### 6. Complete the Feature
 
@@ -191,96 +189,6 @@ Once all tasks are done:
    bira feature update <feature-id> --status done
    git push origin feature/<feature-id>-<short-name>
    ```
-
----
-
-## Findings Format
-
-Create a structured findings document for each feature. This accumulates observations about bira's usability, pain points, and opportunities.
-
-```markdown
-# Findings: <feature-id> <feature-name>
-
-Date: YYYY-MM-DD
-Feature ID: <id>
-Feature Branch: `feature/<id>-<short-name>`
-
----
-
-## What Worked Well
-
-- **Category / Pattern**: Observation about what was intuitive or effective
-  - Reasoning or impact
-  - Example if applicable
-
-- **Another positive**: Details
-
----
-
-## Pain Points / Gaps
-
-- **Issue**: Description of what was difficult or missing
-  - Symptom: How did this manifest?
-  - Impact: What did it prevent or slow down?
-  - Workaround: (if applicable) How did you work around it?
-
-- **Another issue**: Details
-
----
-
-## Neutral Observations
-
-- **Behavior**: Factual observation that's neither positive nor negative
-  - Context where this matters
-
----
-
-## Suggestions
-
-- **Improvement**: Concrete suggestion for enhancing bira
-  - Rationale: Why would this help?
-  - Example usage: How would the improved workflow work?
-
----
-
-## Commit References
-
-List commits completed during this feature:
-
-- `<commit-hash>` - <task-id> <task-name>
-- `<commit-hash>` - <task-id> <task-name>
-```
-
-### Finding Categories
-
-Organize findings one of four ways:
-
-| Category | Purpose |
-|----------|---------|
-| **What Worked Well** | Positive patterns to preserve; design decisions that enable users |
-| **Pain Points / Gaps** | Blockers, missing features, unintuitive UX; these drive improvements |
-| **Neutral Observations** | Behavioral facts that don't feel positive/negative but matter in context |
-| **Suggestions** | Actionable ideas for bira enhancement (already identified pain → proposed solution) |
-
-### Pain Point Template
-
-Every pain point should include:
-
-1. **Issue**: One-line summary
-2. **Symptom**: How did the problem appear?
-3. **Impact**: What work did it block or slow?
-4. **Workaround**: (if applicable) How to get unstuck
-
-### Example Finding Entry
-
-```markdown
-## Pain Points / Gaps
-
-- **No way to bulk-update task status**
-  - Symptom: After completing a feature, marking all 7 tasks as `done` requires 7 separate CLI calls
-  - Impact: Finishing features is tedious; slows down feature completion tracking
-  - Workaround: Use `bira task list --feature <id> --json | jq '.[] | .id'` to get IDs, then loop over them
-```
 
 ---
 
