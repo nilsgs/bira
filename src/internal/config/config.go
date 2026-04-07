@@ -12,9 +12,13 @@ const FileName = ".bira"
 
 // Config is the per-repo bira configuration written at the repo root.
 type Config struct {
-	ProjectID   string `json:"project_id"`
-	ProjectName string `json:"project_name"`
+	ProjectID            string `json:"project_id"`
+	ProjectName          string `json:"project_name"`
+	ClaimTimeoutMinutes  int    `json:"claim_timeout_minutes,omitempty"`
 }
+
+// DefaultClaimTimeoutMinutes is used when ClaimTimeoutMinutes is not set in .bira.
+const DefaultClaimTimeoutMinutes = 1440
 
 // Save writes the config file to the given directory.
 func Save(dir string, cfg *Config) error {

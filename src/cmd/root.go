@@ -40,6 +40,7 @@ func NewRootCmd() *cobra.Command {
 		newProjectCmd(),
 		newFeatureCmd(),
 		newTaskCmd(),
+		newSessionCmd(),
 	)
 	return root
 }
@@ -49,7 +50,8 @@ func Execute() {
 	if err := NewRootCmd().Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		var nfe *notFoundError
-		if errors.As(err, &nfe) {
+		var mde *missingDepError
+		if errors.As(err, &nfe) || errors.As(err, &mde) {
 			os.Exit(2)
 		}
 		os.Exit(1)

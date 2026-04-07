@@ -515,3 +515,465 @@ func TestNotFoundError_Message(t *testing.T) {
 		t.Errorf("error message = %q, want %q", err.Error(), want)
 	}
 }
+
+// --- T11: Acceptance tests ---
+
+// taskShowView mirrors the JSON shape returned by task show.
+type taskShowView struct {
+	models.Task
+	TaskReadiness
+	Feature      interface{} `json:"feature"`
+	Dependencies interface{} `json:"dependencies"`
+}
+
+// taskListView mirrors the JSON shape returned by task list.
+type taskListView struct {
+	models.Task
+	TaskReadiness
+}
+
+func TestTaskShow_ReadinessFields(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("tshow-ready-proj")
+
+	// Task with no description or criteria → not ready
+	aout := e.run("task", "add", "no-desc", "--project", pid, "--json")
+	var added models.Task
+	json.Unmarshal([]byte(aout), &added)
+
+	out := e.run("task", "show", added.ID, "--project", pid, "--json")
+	var v taskShowView
+	if err := json.Unmarshal([]byte(out), &v); err != nil {
+		t.Fatalf("parse: %v\nraw: %s", err, out)
+	}
+	if v.ReadyForAgent {
+		t.Error("expected ready_for_agent=false for task with no desc/criteria")
+	}
+	if len(v.MissingFields) == 0 {
+		t.Error("expected missing_fields to be non-empty")
+	}
+
+	// Add description + criteria → still not ready (backlog feature is fine, but no criteria)
+	e.run("task", "update", added.ID, "--project", pid,
+		"--desc", "detailed description",
+		"--criteria", "must pass all checks")
+
+	out = e.run("task", "show", added.ID, "--project", pid, "--json")
+	if err := json.Unmarshal([]byte(out), &v); err != nil {
+		t.Fatalf("parse after update: %v\nraw: %s", err, out)
+	}
+	if !v.ReadyForAgent {
+		t.Errorf("expected ready_for_agent=true after adding desc+criteria, missing=%v blocked=%v",
+			v.MissingFields, v.BlockedReasons)
+	}
+}
+
+func TestTaskList_ReadyFilter(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("tlist-rdy-proj")
+
+	// ready task
+	e.run("task", "add", "ready-task", "--project", pid,
+		"--desc", "has description",
+		"--criteria", "acceptance criterion")
+
+	// incomplete task (no desc)
+	e.run("task", "add", "not-ready", "--project", pid)
+
+	out := e.run("task", "list", "--ready", "--project", pid, "--json")
+	var views []taskListView
+	if err := json.Unmarshal([]byte(out), &views); err != nil {
+		t.Fatalf("parse: %v\nraw: %s", err, out)
+	}
+	if len(views) != 1 {
+		t.Fatalf("want 1 ready task, got %d", len(views))
+	}
+	if views[0].Title != "ready-task" {
+		t.Errorf("ready task = %q, want ready-task", views[0].Title)
+	}
+	if !views[0].ReadyForAgent {
+		t.Error("expected ready_for_agent=true")
+	}
+}
+
+func TestSession_StartListEnd(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("sess-proj")
+
+	// Start session
+	sout := e.run("session", "start", "--project", pid, "--label", "myagent", "--json")
+	var sess models.Session
+	if err := json.Unmarshal([]byte(sout), &sess); err != nil {
+		t.Fatalf("parse session start: %v\nraw: %s", err, sout)
+	}
+	if len(sess.ID) != 8 {
+		t.Errorf("session ID len = %d, want 8", len(sess.ID))
+	}
+	if sess.Label != "myagent" {
+		t.Errorf("session label = %q, want myagent", sess.Label)
+	}
+
+	// List sessions
+	lout := e.run("session", "list", "--project", pid, "--json")
+	type listEntry struct {
+		models.Session
+		ClaimedTaskCount int `json:"claimed_task_count"`
+	}
+	var entries []listEntry
+	if err := json.Unmarshal([]byte(lout), &entries); err != nil {
+		t.Fatalf("parse session list: %v\nraw: %s", err, lout)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("want 1 session, got %d", len(entries))
+	}
+	if entries[0].ID != sess.ID {
+		t.Errorf("listed session ID = %q, want %q", entries[0].ID, sess.ID)
+	}
+
+	// End session
+	eout := e.run("session", "end", sess.ID, "--project", pid, "--json")
+	type endOut struct {
+		ReleasedTasks []string `json:"released_tasks"`
+	}
+	var endResult endOut
+	if err := json.Unmarshal([]byte(eout), &endResult); err != nil {
+		t.Fatalf("parse session end: %v\nraw: %s", err, eout)
+	}
+
+	// Session should be gone
+	lout2 := e.run("session", "list", "--project", pid, "--json")
+	var entries2 []listEntry
+	json.Unmarshal([]byte(lout2), &entries2)
+	if len(entries2) != 0 {
+		t.Errorf("want 0 sessions after end, got %d", len(entries2))
+	}
+}
+
+func TestSession_LabelUniqueness(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("sess-uniq-proj")
+
+	e.run("session", "start", "--project", pid, "--label", "agent1", "--json")
+
+	err := e.runExpectErr("session", "start", "--project", pid, "--label", "agent1", "--json")
+	if err == nil {
+		t.Fatal("expected error for duplicate session label")
+	}
+}
+
+func TestTaskClaim_Release(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("claim-proj")
+
+	// Create a ready task
+	tout := e.run("task", "add", "claimable", "--project", pid,
+		"--desc", "description here",
+		"--criteria", "must work",
+		"--json")
+	var task models.Task
+	json.Unmarshal([]byte(tout), &task)
+
+	// Start session
+	sout := e.run("session", "start", "--project", pid, "--label", "myagent", "--json")
+	var sess models.Session
+	json.Unmarshal([]byte(sout), &sess)
+
+	// Claim
+	cout := e.run("task", "claim", task.ID, "--session", sess.ID, "--project", pid, "--json")
+	var claimed taskShowView
+	if err := json.Unmarshal([]byte(cout), &claimed); err != nil {
+		t.Fatalf("parse claim: %v\nraw: %s", err, cout)
+	}
+	if claimed.Status != models.StatusInProgress {
+		t.Errorf("status after claim = %q, want in-progress", claimed.Status)
+	}
+	if claimed.ClaimedBy != sess.ID {
+		t.Errorf("claimed_by = %q, want %q", claimed.ClaimedBy, sess.ID)
+	}
+
+	// Release
+	e.run("task", "release", task.ID, "--session", sess.ID, "--project", pid)
+
+	// Verify task is unclaimed
+	sShow := e.run("task", "show", task.ID, "--project", pid, "--json")
+	var released models.Task
+	json.Unmarshal([]byte(sShow), &released)
+	if released.ClaimedBy != "" {
+		t.Errorf("expected empty claimed_by after release, got %q", released.ClaimedBy)
+	}
+	if released.Status != models.StatusTodo {
+		t.Errorf("status after release = %q, want todo", released.Status)
+	}
+}
+
+func TestTaskClaim_SessionRequired(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("claim-sess-proj")
+
+	tout := e.run("task", "add", "claimable", "--project", pid,
+		"--desc", "description", "--criteria", "pass", "--json")
+	var task models.Task
+	json.Unmarshal([]byte(tout), &task)
+
+	// No session → error
+	err := e.runExpectErr("task", "claim", task.ID, "--project", pid)
+	if err == nil {
+		t.Fatal("expected error when no session provided")
+	}
+}
+
+func TestTaskClaim_NotReady(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("claim-notready-proj")
+
+	// Task with no description — not ready
+	tout := e.run("task", "add", "incomplete", "--project", pid, "--json")
+	var task models.Task
+	json.Unmarshal([]byte(tout), &task)
+
+	sout := e.run("session", "start", "--project", pid, "--json")
+	var sess models.Session
+	json.Unmarshal([]byte(sout), &sess)
+
+	err := e.runExpectErr("task", "claim", task.ID, "--session", sess.ID, "--project", pid)
+	if err == nil {
+		t.Fatal("expected error claiming non-ready task")
+	}
+}
+
+func TestTaskDone_ClaimedByOtherSession(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("done-other-sess-proj")
+
+	tout := e.run("task", "add", "doneme", "--project", pid,
+		"--desc", "desc", "--criteria", "crit", "--json")
+	var task models.Task
+	json.Unmarshal([]byte(tout), &task)
+
+	s1out := e.run("session", "start", "--project", pid, "--label", "s1", "--json")
+	var sess1 models.Session
+	json.Unmarshal([]byte(s1out), &sess1)
+
+	s2out := e.run("session", "start", "--project", pid, "--label", "s2", "--json")
+	var sess2 models.Session
+	json.Unmarshal([]byte(s2out), &sess2)
+
+	// Claim with session 1
+	e.run("task", "claim", task.ID, "--session", sess1.ID, "--project", pid)
+
+	// Done with session 2 → error
+	err := e.runExpectErr("task", "done", task.ID, "--session", sess2.ID, "--project", pid)
+	if err == nil {
+		t.Fatal("expected error when session 2 tries to done a task claimed by session 1")
+	}
+}
+
+func TestTaskUpdate_ClaimedStatusBlocked(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("update-claimed-proj")
+
+	tout := e.run("task", "add", "claimtask", "--project", pid,
+		"--desc", "desc", "--criteria", "crit", "--json")
+	var task models.Task
+	json.Unmarshal([]byte(tout), &task)
+
+	sout := e.run("session", "start", "--project", pid, "--json")
+	var sess models.Session
+	json.Unmarshal([]byte(sout), &sess)
+
+	e.run("task", "claim", task.ID, "--session", sess.ID, "--project", pid)
+
+	// Update --status on a claimed task → error
+	err := e.runExpectErr("task", "update", task.ID, "--status", "todo", "--project", pid)
+	if err == nil {
+		t.Fatal("expected error updating status on claimed task")
+	}
+}
+
+func TestTaskAdd_SelfDependency(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("selfdep-proj")
+
+	// We can't self-reference on add (ID not known yet), so test cycle via update
+	t1out := e.run("task", "add", "t1", "--project", pid,
+		"--desc", "d", "--criteria", "c", "--json")
+	var t1 models.Task
+	json.Unmarshal([]byte(t1out), &t1)
+
+	err := e.runExpectErr("task", "update", t1.ID, "--depends-on", t1.ID, "--project", pid)
+	if err == nil {
+		t.Fatal("expected error for self-dependency")
+	}
+}
+
+func TestTaskAdd_CircularDependency(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("cycle-proj")
+
+	t1out := e.run("task", "add", "t1", "--project", pid, "--json")
+	var t1 models.Task
+	json.Unmarshal([]byte(t1out), &t1)
+
+	t2out := e.run("task", "add", "t2", "--depends-on", t1.ID, "--project", pid, "--json")
+	var t2 models.Task
+	json.Unmarshal([]byte(t2out), &t2)
+
+	// t1 depending on t2 would create a cycle: t1→t2→t1
+	err := e.runExpectErr("task", "update", t1.ID, "--depends-on", t2.ID, "--project", pid)
+	if err == nil {
+		t.Fatal("expected error for circular dependency")
+	}
+}
+
+func TestTaskDelete_BlockedByDependent(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("tdel-blocked-proj")
+
+	t1out := e.run("task", "add", "t1", "--project", pid, "--json")
+	var t1 models.Task
+	json.Unmarshal([]byte(t1out), &t1)
+
+	e.run("task", "add", "t2", "--depends-on", t1.ID, "--project", pid, "--json")
+
+	// Delete t1 should fail because t2 depends on it
+	err := e.runExpectErr("task", "delete", t1.ID, "--project", pid)
+	if err == nil {
+		t.Fatal("expected error deleting task with active dependents")
+	}
+}
+
+func TestFeatureDelete_BlockedByTasks(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("fdel-blocked-proj")
+
+	fout := e.run("feature", "add", "my-feat", "--project", pid, "--json")
+	var feat models.Feature
+	json.Unmarshal([]byte(fout), &feat)
+
+	e.run("task", "add", "feat-task", "--feature", feat.ID, "--project", pid)
+
+	// Delete feature without --move-tasks-to → error
+	err := e.runExpectErr("feature", "delete", feat.ID, "--project", pid)
+	if err == nil {
+		t.Fatal("expected error deleting feature with tasks")
+	}
+}
+
+func TestFeatureDelete_MoveTasksTo(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("fdel-move-proj")
+
+	f1out := e.run("feature", "add", "feat-src", "--project", pid, "--json")
+	var f1 models.Feature
+	json.Unmarshal([]byte(f1out), &f1)
+
+	f2out := e.run("feature", "add", "feat-dst", "--project", pid, "--json")
+	var f2 models.Feature
+	json.Unmarshal([]byte(f2out), &f2)
+
+	tout := e.run("task", "add", "moveme", "--feature", f1.ID, "--project", pid, "--json")
+	var task models.Task
+	json.Unmarshal([]byte(tout), &task)
+
+	// Delete f1, move tasks to f2
+	e.run("feature", "delete", f1.ID, "--move-tasks-to", f2.ID, "--project", pid)
+
+	// Task should now belong to f2
+	sout := e.run("task", "show", task.ID, "--project", pid, "--json")
+	var updated models.Task
+	json.Unmarshal([]byte(sout), &updated)
+	if updated.FeatureID != f2.ID {
+		t.Errorf("task feature after move = %q, want %q", updated.FeatureID, f2.ID)
+	}
+}
+
+func TestFeatureDelete_RejectsDoneTarget(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("fdel-done-proj")
+
+	f1out := e.run("feature", "add", "feat-src", "--project", pid, "--json")
+	var f1 models.Feature
+	json.Unmarshal([]byte(f1out), &f1)
+
+	f2out := e.run("feature", "add", "feat-done", "--project", pid, "--json")
+	var f2 models.Feature
+	json.Unmarshal([]byte(f2out), &f2)
+	e.run("feature", "update", f2.ID, "--status", "done", "--project", pid)
+
+	e.run("task", "add", "moveme", "--feature", f1.ID, "--project", pid)
+
+	// Moving to a done feature → error
+	err := e.runExpectErr("feature", "delete", f1.ID, "--move-tasks-to", f2.ID, "--project", pid)
+	if err == nil {
+		t.Fatal("expected error moving tasks to done feature")
+	}
+}
+
+func TestContext_FullAgentCounters(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("ctx-agent-proj")
+
+	// Ready task
+	tout := e.run("task", "add", "ready-task", "--project", pid,
+		"--desc", "desc", "--criteria", "crit", "--json")
+	var task models.Task
+	json.Unmarshal([]byte(tout), &task)
+
+	// Start session and claim task
+	sout := e.run("session", "start", "--project", pid, "--label", "agent1", "--json")
+	var sess models.Session
+	json.Unmarshal([]byte(sout), &sess)
+
+	e.run("task", "claim", task.ID, "--session", sess.ID, "--project", pid)
+
+	out := e.run("context", "--full", "--project", pid, "--json")
+	var ctx contextOutput
+	if err := json.Unmarshal([]byte(out), &ctx); err != nil {
+		t.Fatalf("parse context: %v\nraw: %s", err, out)
+	}
+	if ctx.ActiveSessionCount != 1 {
+		t.Errorf("active_session_count = %d, want 1", ctx.ActiveSessionCount)
+	}
+	if ctx.ClaimedTaskCount != 1 {
+		t.Errorf("claimed_task_count = %d, want 1", ctx.ClaimedTaskCount)
+	}
+}
+
+func TestSessionEnd_ReleasesClaimedTasks(t *testing.T) {
+	e := newTestEnv(t)
+	pid := e.initProject("sess-end-release-proj")
+
+	tout := e.run("task", "add", "endme", "--project", pid,
+		"--desc", "desc", "--criteria", "crit", "--json")
+	var task models.Task
+	json.Unmarshal([]byte(tout), &task)
+
+	sout := e.run("session", "start", "--project", pid, "--json")
+	var sess models.Session
+	json.Unmarshal([]byte(sout), &sess)
+
+	e.run("task", "claim", task.ID, "--session", sess.ID, "--project", pid)
+
+	// End session
+	eout := e.run("session", "end", sess.ID, "--project", pid, "--json")
+	type endOut struct {
+		ReleasedTasks []string `json:"released_tasks"`
+	}
+	var endResult endOut
+	json.Unmarshal([]byte(eout), &endResult)
+	if len(endResult.ReleasedTasks) != 1 {
+		t.Errorf("released_tasks = %d, want 1", len(endResult.ReleasedTasks))
+	}
+
+	// Task should be unclaimed and back to todo
+	tshow := e.run("task", "show", task.ID, "--project", pid, "--json")
+	var released models.Task
+	json.Unmarshal([]byte(tshow), &released)
+	if released.ClaimedBy != "" {
+		t.Errorf("expected empty claimed_by after session end, got %q", released.ClaimedBy)
+	}
+	if released.Status != models.StatusTodo {
+		t.Errorf("status after session end = %q, want todo", released.Status)
+	}
+}
+

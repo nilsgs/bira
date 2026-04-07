@@ -71,6 +71,7 @@ func newFeatureCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE:  runFeatureDelete,
 	}
+	deleteCmd.Flags().String("move-tasks-to", "", "move tasks to this feature ID before deleting")
 
 	// --- note ---
 
@@ -279,6 +280,8 @@ func runFeatureDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	moveTasksTo, _ := cmd.Flags().GetString("move-tasks-to")
+
 	lock, err := store.AcquireLock(projectDir)
 	if err != nil {
 		return err
@@ -295,6 +298,51 @@ func runFeatureDelete(cmd *cobra.Command, args []string) error {
 
 	if feature.IsBacklog {
 		return fmt.Errorf("cannot delete the backlog feature")
+	}
+
+	tasks, err := loadAllTasks(projectID)
+	if err != nil {
+		return err
+	}
+
+	var belongingTasks []*models.Task
+	for i := range tasks {
+		if tasks[i].FeatureID == feature.ID {
+			belongingTasks = append(belongingTasks, &tasks[i])
+		}
+	}
+
+	if len(belongingTasks) > 0 {
+		if moveTasksTo == "" {
+			ids := make([]string, len(belongingTasks))
+			for i, t := range belongingTasks {
+				ids[i] = t.ID
+			}
+			return fmt.Errorf("feature %s has %d task(s) (%s); use --move-tasks-to to reassign them first",
+				feature.ID, len(belongingTasks), strings.Join(ids, ", "))
+		}
+
+		// Validate target feature.
+		target, err := loadFeature(projectID, moveTasksTo)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return notFoundErr("feature", moveTasksTo)
+			}
+			return err
+		}
+		if target.Status == models.StatusDone {
+			return fmt.Errorf("cannot move tasks to feature %s because it is done", target.ID)
+		}
+
+		now := time.Now().UTC()
+		for _, t := range belongingTasks {
+			t.FeatureID = target.ID
+			t.UpdatedAt = now
+			p := filepath.Join(projectDir, "tasks", t.ID+".json")
+			if err := store.SaveJSON(p, t); err != nil {
+				return fmt.Errorf("update task %s: %w", t.ID, err)
+			}
+		}
 	}
 
 	path := filepath.Join(projectDir, "features", feature.ID+".json")
@@ -367,8 +415,9 @@ func loadAllFeatures(projectID string) ([]models.Feature, error) {
 			continue
 		}
 		var f models.Feature
-		if err := store.LoadJSON(filepath.Join(featuresDir, name), &f); err != nil {
-			continue
+		path := filepath.Join(featuresDir, name)
+		if err := store.LoadJSON(path, &f); err != nil {
+			return nil, fmt.Errorf("failed to load %s: %w", path, err)
 		}
 		features = append(features, f)
 	}

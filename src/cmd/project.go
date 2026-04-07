@@ -191,8 +191,9 @@ func loadConfigFromDir(dir string) (*configData, string, error) {
 }
 
 type configData struct {
-	ProjectID   string `json:"project_id"`
-	ProjectName string `json:"project_name"`
+	ProjectID            string `json:"project_id"`
+	ProjectName          string `json:"project_name"`
+	ClaimTimeoutMinutes  int    `json:"claim_timeout_minutes,omitempty"`
 }
 
 func loadProject(id string) (*models.Project, error) {
@@ -206,3 +207,23 @@ func loadProject(id string) (*models.Project, error) {
 	}
 	return &p, nil
 }
+
+// loadClaimTimeout returns the claim timeout minutes from the .bira config in the
+// current working directory, falling back to defaultClaimTimeout (1440).
+func loadClaimTimeout(_ *cobra.Command) int {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return defaultClaimTimeout
+	}
+	cfg, _, err := loadConfigFromDir(cwd)
+	if err != nil {
+		return defaultClaimTimeout
+	}
+	if cfg.ClaimTimeoutMinutes > 0 {
+		return cfg.ClaimTimeoutMinutes
+	}
+	return defaultClaimTimeout
+}
+
+const defaultClaimTimeout = 1440
+
