@@ -1,0 +1,139 @@
+Feature: bira session and task claim/release
+
+  Scenario: Session start creates a session
+    When I run "sh -c 'bira init --name sess-proj > /dev/null && bira session start'"
+    Then exit code is 0
+    And output contains "Session started:"
+    And output contains "export BIRA_SESSION="
+
+  Scenario: Session start --json returns structured output
+    When I run "sh -c 'bira init --name sess-json > /dev/null && bira session start --json'"
+    Then exit code is 0
+    And output contains "\"id\":"
+    And output contains "\"project_id\":"
+
+  Scenario: Session start with --label sets label
+    When I run "sh -c 'bira init --name sess-label > /dev/null && bira session start --label my-agent --json'"
+    Then exit code is 0
+    And output contains "\"label\": \"my-agent\""
+
+  Scenario: Session start with duplicate label fails
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name sess-dup > /dev/null
+      bira session start --label agent1 > /dev/null
+      bira session start --label agent1
+    When I run "sh run.sh"
+    Then exit code is not 0
+
+  Scenario: Session list shows active sessions
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name sess-list > /dev/null
+      bira session start --label list-agent > /dev/null
+      bira session list
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "list-agent"
+
+  Scenario: Session list --json returns array
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name sess-list-json > /dev/null
+      bira session start --label json-agent > /dev/null
+      bira session list --json
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "\"label\": \"json-agent\""
+
+  Scenario: Session show displays session details
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name sess-show > /dev/null
+      SID=$(bira session start --label show-agent --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira session show "$SID"
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "show-agent"
+    And output contains "Session:"
+
+  Scenario: Session show unknown ID returns exit 2
+    When I run "sh -c 'bira init --name sess-show-err > /dev/null && bira session show deadbeef'"
+    Then exit code is 2
+
+  Scenario: Session end releases claimed tasks
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name sess-end > /dev/null
+      SID=$(bira session start --label end-agent --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      TID=$(bira task add end-task --desc "d" --assign end-agent --criteria "c" --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task claim "$TID" --session "$SID"
+      bira session end "$SID"
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "ended"
+
+  Scenario: Session end --json returns released tasks list
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name sess-end-json > /dev/null
+      SID=$(bira session start --label ej-agent --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      TID=$(bira task add ej-task --desc "d" --assign ej-agent --criteria "c" --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task claim "$TID" --session "$SID"
+      bira session end "$SID" --json
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "\"released_tasks\":"
+
+  Scenario: Task claim marks task as in-progress
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name tclaim > /dev/null
+      SID=$(bira session start --label claim-agent --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      TID=$(bira task add claim-task --desc "d" --assign claim-agent --criteria "c" --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task claim "$TID" --session "$SID" --json
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "\"status\": \"in-progress\""
+    And output contains "\"claimed_by\":"
+
+  Scenario: Task claim without session ID fails
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name tclaim-nosess > /dev/null
+      TID=$(bira task add t1 --desc d --assign a --criteria c --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task claim "$TID"
+    When I run "sh run.sh"
+    Then exit code is not 0
+
+  Scenario: Task claim on non-ready task fails
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name tclaim-notready > /dev/null
+      SID=$(bira session start --label nr-agent --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      TID=$(bira task add not-ready-task --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task claim "$TID" --session "$SID"
+    When I run "sh run.sh"
+    Then exit code is not 0
+
+  Scenario: Task release returns task to pool
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name trelease > /dev/null
+      SID=$(bira session start --label rel-agent --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      TID=$(bira task add rel-task --desc "d" --assign rel-agent --criteria "c" --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task claim "$TID" --session "$SID"
+      bira task release "$TID" --session "$SID" --json
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "\"status\": \"todo\""

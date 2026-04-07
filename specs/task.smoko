@@ -1,0 +1,188 @@
+Feature: bira task
+
+  Scenario: Task add creates a task in the backlog
+    When I run "sh -c 'bira init --name task-proj > /dev/null && bira task add my-task'"
+    Then exit code is 0
+    And output contains "Created task"
+    And output contains "my-task"
+
+  Scenario: Task add --json returns structured output
+    When I run "sh -c 'bira init --name task-json > /dev/null && bira task add json-task --json'"
+    Then exit code is 0
+    And output contains "\"title\": \"json-task\""
+    And output contains "\"status\": \"todo\""
+
+  Scenario: Task add to a specific feature
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name task-feat > /dev/null
+      FID=$(bira feature add my-feat --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task add feat-task --feature "$FID" --json
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "\"title\": \"feat-task\""
+
+  Scenario: Task add to unknown feature fails
+    When I run "sh -c 'bira init --name task-badfeat > /dev/null && bira task add orphan --feature deadbeef'"
+    Then exit code is 2
+
+  Scenario: Task add with --desc, --assign, --tags
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      bira init --name task-flags > /dev/null
+      bira task add flagged-task --desc "detailed desc" --assign agent42 --tags "x,y" --json
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "\"description\": \"detailed desc\""
+    And output contains "\"assigned_to\": \"agent42\""
+
+  Scenario: Task list shows tasks
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      bira init --name tlist > /dev/null
+      bira task add task-alpha > /dev/null
+      bira task list
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "task-alpha"
+
+  Scenario: Task list --json returns array
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      bira init --name tlist-json > /dev/null
+      bira task add beta-task > /dev/null
+      bira task list --json
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "\"title\": \"beta-task\""
+
+  Scenario: Task list --ready shows only ready tasks
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name tready > /dev/null
+      bira task add incomplete-task > /dev/null
+      bira task add ready-task --desc "has desc" --assign agent1 --criteria "done" --json > /dev/null
+      bira task list --ready
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "ready-task"
+
+  Scenario: Task list --status filters by status
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name tstatus > /dev/null
+      TID=$(bira task add in-prog-task --desc "d" --assign a1 --criteria "c" --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task update "$TID" --status in-progress > /dev/null
+      bira task list --status in-progress
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "in-prog-task"
+
+  Scenario: Task list --feature filters by feature
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name tfeat-list > /dev/null
+      FID=$(bira feature add my-feat --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task add feat-only-task --feature "$FID" > /dev/null
+      bira task add other-task > /dev/null
+      bira task list --feature "$FID"
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "feat-only-task"
+
+  Scenario: Task show displays task details
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name tshow > /dev/null
+      TID=$(bira task add show-task --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task show "$TID"
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "show-task"
+    And output contains "ID:"
+    And output contains "Status:"
+
+  Scenario: Task show unknown ID returns exit 2
+    When I run "sh -c 'bira init --name tshow-err > /dev/null && bira task show deadbeef'"
+    Then exit code is 2
+
+  Scenario: Task update changes status
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name tupdate > /dev/null
+      TID=$(bira task add to-update --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task update "$TID" --status blocked --json
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "\"status\": \"blocked\""
+
+  Scenario: Task update with invalid status fails
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name tupdate-bad > /dev/null
+      TID=$(bira task add bad-upd --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task update "$TID" --status nonsense
+    When I run "sh run.sh"
+    Then exit code is not 0
+
+  Scenario: Task done marks task as done
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name tdone > /dev/null
+      TID=$(bira task add to-finish --desc "d" --assign a1 --criteria "c" --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task done "$TID"
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "done"
+
+  Scenario: Task done --json returns updated task
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name tdone-json > /dev/null
+      TID=$(bira task add finish-json --desc "d" --assign a1 --criteria "c" --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task done "$TID" --json
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "\"status\": \"done\""
+
+  Scenario: Task delete removes task
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name tdel > /dev/null
+      TID=$(bira task add to-delete --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task delete "$TID"
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "Deleted task"
+
+  Scenario: Task note appends a note
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name tnote > /dev/null
+      TID=$(bira task add to-note --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task note "$TID" "important note"
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "Note added"
+
+  Scenario: Task with dependencies blocks readiness until dep is done
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name tdeps > /dev/null
+      DEP=$(bira task add dep-task --desc "d" --assign a1 --criteria "c" --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira task add blocked-task --depends-on "$DEP" --desc "d" --assign a1 --criteria "c" --json
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "\"depends_on\":"

@@ -1,0 +1,29 @@
+Feature: bira init
+
+  Scenario: Init creates a project in the current directory
+    When I run "bira init --name my-project"
+    Then exit code is 0
+    And output contains "Initialized project"
+    And output contains "my-project"
+    And file ".bira" exists
+
+  Scenario: Init uses directory name when --name is omitted
+    When I run "bira init"
+    Then exit code is 0
+    And output contains "Initialized project"
+    And output contains "smoko-work"
+
+  Scenario: Init with --name flag sets the project name
+    When I run "bira init --name custom-name"
+    Then exit code is 0
+    And output contains "custom-name"
+
+  Scenario: Init --json returns structured project output
+    When I run "bira init --name json-proj --json"
+    Then exit code is 0
+    And output contains "\"name\": \"json-proj\""
+    And output contains "\"id\":"
+
+  Scenario: Init fails when already initialized
+    When I run "sh -c 'bira init --name first && bira init --name second'"
+    Then exit code is not 0

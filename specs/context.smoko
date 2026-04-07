@@ -1,0 +1,26 @@
+Feature: bira context
+
+  Scenario: Context shows project summary after init
+    When I run "sh -c 'bira init --name ctx-proj > /dev/null && bira context'"
+    Then exit code is 0
+    And output contains "ctx-proj"
+    And output contains "Open tasks:"
+
+  Scenario: Context --json returns structured output
+    When I run "sh -c 'bira init --name ctx-json > /dev/null && bira context --json'"
+    Then exit code is 0
+    And output contains "\"project_name\": \"ctx-json\""
+    And output contains "\"open_task_count\":"
+
+  Scenario: Context --full shows feature breakdown
+    When I run "sh -c 'bira init --name ctx-full > /dev/null && bira context --full'"
+    Then exit code is 0
+    And output contains "ctx-full"
+    And output contains "backlog"
+    And output contains "Ready:"
+
+  Scenario: Context --full --json shows features array
+    When I run "sh -c 'bira init --name ctx-full-json > /dev/null && bira context --full --json'"
+    Then exit code is 0
+    And output contains "\"features\":"
+    And output contains "\"is_backlog\": true"

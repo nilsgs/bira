@@ -1,0 +1,57 @@
+Feature: bira project
+
+  Scenario: Project list shows initialized project
+    When I run "sh -c 'bira init --name list-proj > /dev/null && bira project list'"
+    Then exit code is 0
+    And output contains "list-proj"
+
+  Scenario: Project list --json returns array
+    When I run "sh -c 'bira init --name list-json > /dev/null && bira project list --json'"
+    Then exit code is 0
+    And output contains "\"name\": \"list-json\""
+
+  Scenario: Project show displays details of current project
+    When I run "sh -c 'bira init --name show-proj > /dev/null && bira project show'"
+    Then exit code is 0
+    And output contains "show-proj"
+    And output contains "ID:"
+    And output contains "Repo:"
+
+  Scenario: Project show --json returns structured output
+    When I run "sh -c 'bira init --name show-json > /dev/null && bira project show --json'"
+    Then exit code is 0
+    And output contains "\"name\": \"show-json\""
+    And output contains "\"id\":"
+
+  Scenario: Project show by explicit ID
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name by-id > /dev/null
+      PID=$(bira project show --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira project show "$PID"
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "by-id"
+
+  Scenario: Project delete requires --yes flag
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name del-proj > /dev/null
+      PID=$(bira project show --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira project delete "$PID"
+    When I run "sh run.sh"
+    Then exit code is not 0
+
+  Scenario: Project delete with --yes removes project
+    Given a file "run.sh" with content:
+      #!/bin/sh
+      set -e
+      bira init --name del-yes > /dev/null
+      PID=$(bira project show --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
+      bira project delete "$PID" --yes
+    When I run "sh run.sh"
+    Then exit code is 0
+    And output contains "Deleted project"
+    And output contains "del-yes"
