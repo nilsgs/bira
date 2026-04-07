@@ -338,6 +338,8 @@ Per-feature: `feature_id`, `name`, `status`, `is_backlog`, task counts by status
 
 ### Always use `--json` in scripts
 
+**Empty collections always serialize as `[]`, never `null`.** This means `jq '.[].id'` on a `task list` or `feature list` result is always safe — no null-guard needed.
+
 ```bash
 # Get full project state as JSON
 bira context --full --json

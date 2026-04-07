@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"cmp"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -168,7 +170,7 @@ func runTaskAdd(cmd *cobra.Command, args []string) error {
 	} else {
 		// Verify feature exists
 		if _, err := loadFeature(projectID, featureID); err != nil {
-			if os.IsNotExist(err) {
+			if errors.Is(err, os.ErrNotExist) {
 				return notFoundErr("feature", featureID)
 			}
 			return err
@@ -250,7 +252,7 @@ func runTaskList(cmd *cobra.Command, args []string) error {
 		TaskReadiness
 	}
 
-	var views []taskView
+	views := make([]taskView, 0, len(tasks))
 	for _, t := range tasks {
 		r := computeReadiness(t, tasksByID, featuresByID, timeoutMinutes)
 		views = append(views, taskView{Task: t, TaskReadiness: r})
@@ -325,12 +327,11 @@ func runTaskList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Sort by created_at ASC, id ASC
-	sort.Slice(views, func(i, j int) bool {
-		a, b := views[i].Task, views[j].Task
-		if !a.CreatedAt.Equal(b.CreatedAt) {
-			return a.CreatedAt.Before(b.CreatedAt)
+	slices.SortFunc(views, func(a, b taskView) int {
+		if n := a.CreatedAt.Compare(b.CreatedAt); n != 0 {
+			return n
 		}
-		return a.ID < b.ID
+		return cmp.Compare(a.ID, b.ID)
 	})
 
 	output(cmd, views, func(w io.Writer) {
@@ -361,7 +362,7 @@ func runTaskShow(cmd *cobra.Command, args []string) error {
 	}
 	task, err := loadTask(projectID, args[0])
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("task", args[0])
 		}
 		return err
@@ -514,7 +515,7 @@ func runTaskUpdate(cmd *cobra.Command, args []string) error {
 
 	task, err := loadTask(projectID, args[0])
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("task", args[0])
 		}
 		return err
@@ -589,7 +590,7 @@ func runTaskDelete(cmd *cobra.Command, args []string) error {
 
 	task, err := loadTask(projectID, args[0])
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("task", args[0])
 		}
 		return err
@@ -645,7 +646,7 @@ func runTaskDone(cmd *cobra.Command, args []string) error {
 
 	task, err := loadTask(projectID, args[0])
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("task", args[0])
 		}
 		return err
@@ -699,7 +700,7 @@ func runTaskClaim(cmd *cobra.Command, args []string) error {
 
 	task, err := loadTask(projectID, args[0])
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("task", args[0])
 		}
 		return err
@@ -707,7 +708,7 @@ func runTaskClaim(cmd *cobra.Command, args []string) error {
 
 	session, err := loadSession(projectID, sessionID)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("session", sessionID)
 		}
 		return err
@@ -804,7 +805,7 @@ func runTaskRelease(cmd *cobra.Command, args []string) error {
 
 	task, err := loadTask(projectID, args[0])
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("task", args[0])
 		}
 		return err
@@ -812,7 +813,7 @@ func runTaskRelease(cmd *cobra.Command, args []string) error {
 
 	session, err := loadSession(projectID, sessionID)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("session", sessionID)
 		}
 		return err
@@ -872,17 +873,18 @@ func runTaskNote(cmd *cobra.Command, args []string) error {
 
 	task, err := loadTask(projectID, args[0])
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("task", args[0])
 		}
 		return err
 	}
 
+	now := time.Now().UTC()
 	task.Notes = append(task.Notes, models.Note{
-		Timestamp: time.Now().UTC(),
+		Timestamp: now,
 		Body:      args[1],
 	})
-	task.UpdatedAt = time.Now().UTC()
+	task.UpdatedAt = now
 
 	path := filepath.Join(projectDir, "tasks", task.ID+".json")
 	if err := store.SaveJSON(path, task); err != nil {
@@ -905,7 +907,7 @@ func loadAllTasks(projectID string) ([]models.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	var tasks []models.Task
+	tasks := make([]models.Task, 0, len(names))
 	for _, name := range names {
 		if !strings.HasSuffix(name, ".json") {
 			continue
@@ -913,7 +915,7 @@ func loadAllTasks(projectID string) ([]models.Task, error) {
 		var t models.Task
 		path := filepath.Join(tasksDir, name)
 		if err := store.LoadJSON(path, &t); err != nil {
-			return nil, fmt.Errorf("failed to load %s: %w", path, err)
+			return nil, fmt.Errorf("load %s: %w", path, err)
 		}
 		tasks = append(tasks, t)
 	}

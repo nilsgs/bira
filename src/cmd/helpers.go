@@ -1,8 +1,9 @@
 package cmd
 
 import (
+	"cmp"
 	"os"
-	"sort"
+	"slices"
 
 	"bira/internal/models"
 )
@@ -18,25 +19,28 @@ func resolveSession(flagValue string) string {
 
 // sortTasks sorts tasks deterministically: created_at ASC, then id ASC.
 func sortTasks(tasks []models.Task) {
-	sort.Slice(tasks, func(i, j int) bool {
-		if tasks[i].CreatedAt.Equal(tasks[j].CreatedAt) {
-			return tasks[i].ID < tasks[j].ID
+	slices.SortFunc(tasks, func(a, b models.Task) int {
+		if n := a.CreatedAt.Compare(b.CreatedAt); n != 0 {
+			return n
 		}
-		return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
+		return cmp.Compare(a.ID, b.ID)
 	})
 }
 
 // sortFeatures sorts features deterministically:
 // backlog first (is_backlog DESC), then created_at ASC, then id ASC.
 func sortFeatures(features []models.Feature) {
-	sort.Slice(features, func(i, j int) bool {
-		if features[i].IsBacklog != features[j].IsBacklog {
-			return features[i].IsBacklog // backlog sorts first
+	slices.SortFunc(features, func(a, b models.Feature) int {
+		if a.IsBacklog != b.IsBacklog {
+			if a.IsBacklog {
+				return -1
+			}
+			return 1
 		}
-		if features[i].CreatedAt.Equal(features[j].CreatedAt) {
-			return features[i].ID < features[j].ID
+		if n := a.CreatedAt.Compare(b.CreatedAt); n != 0 {
+			return n
 		}
-		return features[i].CreatedAt.Before(features[j].CreatedAt)
+		return cmp.Compare(a.ID, b.ID)
 	})
 }
 

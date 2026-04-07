@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -177,7 +178,7 @@ func runSessionShow(cmd *cobra.Command, args []string) error {
 
 	session, err := loadSession(projectID, sessionID)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("session", sessionID)
 		}
 		return err
@@ -259,7 +260,7 @@ func runSessionEnd(cmd *cobra.Command, args []string) error {
 
 	_, err = loadSession(projectID, sessionID)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("session", sessionID)
 		}
 		return err
@@ -327,7 +328,7 @@ func loadAllSessions(projectID string) ([]models.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	var sessions []models.Session
+	sessions := make([]models.Session, 0, len(names))
 	for _, name := range names {
 		if !strings.HasSuffix(name, ".json") {
 			continue
@@ -335,7 +336,7 @@ func loadAllSessions(projectID string) ([]models.Session, error) {
 		var s models.Session
 		path := filepath.Join(sessionsDir, name)
 		if err := store.LoadJSON(path, &s); err != nil {
-			return nil, fmt.Errorf("failed to load %s: %w", path, err)
+			return nil, fmt.Errorf("load %s: %w", path, err)
 		}
 		sessions = append(sessions, s)
 	}

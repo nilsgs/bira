@@ -6,7 +6,7 @@ AI-agent optimised CLI for project management. Tracks projects, features, and ta
 
 ## Install
 
-**Prerequisites:** [Go](https://go.dev/dl/) 1.21+
+**Prerequisites:** [Go](https://go.dev/dl/) 1.26+
 
 ### Linux / macOS
 ```sh
@@ -143,7 +143,7 @@ The **backlog** feature (auto-created by `bira init`) cannot be deleted.
 
 ```sh
 bira task add <title> [flags]
-bira task list [--feature <id>] [--status <status>] [--ready] [--assigned <name>] [--unclaimed]
+bira task list [--feature <id>] [--status <status>] [--ready] [--assigned <name>] [--unassigned] [--claimed-by <id>] [--unclaimed]
 bira task show <id>
 bira task update <id> [flags]
 bira task delete <id>
@@ -281,6 +281,7 @@ bira is designed to be driven by AI agents:
 - Exit codes: `0` success · `1` general error · `2` entity not found or missing dependency.
 - IDs are short 8-character hex strings (readable in logs and prompts).
 - `$BIRA_SESSION` sets the default session ID for `claim`, `release`, and `done`.
+- **Empty collections always serialize as `[]`** — never `null` — so `jq '.[].id'` is always safe.
 
 **Typical multi-agent loop:**
 
@@ -351,7 +352,7 @@ cd src && go test ./... -v -count=1
 All output functions have been instrumented to accept `io.Writer` for clean testing. This enables:
 - Unit tests to capture command output to buffers
 - No file system pollution (each test uses `t.TempDir()` + `BIRA_HOME`)
-- Sequential test execution (safe because `rootCmd` is process-wide)
+- Test isolation via `NewRootCmd()` — each `run()` call constructs a fresh command tree with no shared state
 
 **Test breakdown:**
 - `internal/store` — 9 tests (storage layer, file ops, BIRA_HOME env var)

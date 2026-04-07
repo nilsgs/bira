@@ -29,12 +29,12 @@ func validateDependsOn(taskID string, newDeps []string, allTasksByID map[string]
 	}
 
 	// Duplicates
-	seen := make(map[string]bool, len(newDeps))
+	seen := make(map[string]struct{}, len(newDeps))
 	for _, id := range newDeps {
-		if seen[id] {
+		if _, exists := seen[id]; exists {
 			return fmt.Errorf("duplicate dependency ID: %s", id)
 		}
-		seen[id] = true
+		seen[id] = struct{}{}
 	}
 
 	// Existence

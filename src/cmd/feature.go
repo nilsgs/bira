@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -182,7 +183,7 @@ func runFeatureShow(cmd *cobra.Command, args []string) error {
 	}
 	feature, err := loadFeature(projectID, args[0])
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("feature", args[0])
 		}
 		return err
@@ -236,7 +237,7 @@ func runFeatureUpdate(cmd *cobra.Command, args []string) error {
 
 	feature, err := loadFeature(projectID, args[0])
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("feature", args[0])
 		}
 		return err
@@ -290,7 +291,7 @@ func runFeatureDelete(cmd *cobra.Command, args []string) error {
 
 	feature, err := loadFeature(projectID, args[0])
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("feature", args[0])
 		}
 		return err
@@ -325,7 +326,7 @@ func runFeatureDelete(cmd *cobra.Command, args []string) error {
 		// Validate target feature.
 		target, err := loadFeature(projectID, moveTasksTo)
 		if err != nil {
-			if os.IsNotExist(err) {
+			if errors.Is(err, os.ErrNotExist) {
 				return notFoundErr("feature", moveTasksTo)
 			}
 			return err
@@ -376,17 +377,18 @@ func runFeatureNote(cmd *cobra.Command, args []string) error {
 
 	feature, err := loadFeature(projectID, args[0])
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("feature", args[0])
 		}
 		return err
 	}
 
+	now := time.Now().UTC()
 	feature.Notes = append(feature.Notes, models.Note{
-		Timestamp: time.Now().UTC(),
+		Timestamp: now,
 		Body:      args[1],
 	})
-	feature.UpdatedAt = time.Now().UTC()
+	feature.UpdatedAt = now
 
 	path := filepath.Join(projectDir, "features", feature.ID+".json")
 	if err := store.SaveJSON(path, feature); err != nil {
@@ -409,7 +411,7 @@ func loadAllFeatures(projectID string) ([]models.Feature, error) {
 	if err != nil {
 		return nil, err
 	}
-	var features []models.Feature
+	features := make([]models.Feature, 0, len(names))
 	for _, name := range names {
 		if !strings.HasSuffix(name, ".json") {
 			continue
@@ -417,7 +419,7 @@ func loadAllFeatures(projectID string) ([]models.Feature, error) {
 		var f models.Feature
 		path := filepath.Join(featuresDir, name)
 		if err := store.LoadJSON(path, &f); err != nil {
-			return nil, fmt.Errorf("failed to load %s: %w", path, err)
+			return nil, fmt.Errorf("load %s: %w", path, err)
 		}
 		features = append(features, f)
 	}

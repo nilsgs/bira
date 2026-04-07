@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"bira/internal/config"
 	"bira/internal/models"
 	"bira/internal/store"
 
@@ -55,7 +57,7 @@ func runProjectList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	var projects []models.Project
+	projects := make([]models.Project, 0, len(entries))
 	for _, name := range entries {
 		metaPath := filepath.Join(projectsDir, name, "meta.json")
 		var p models.Project
@@ -94,7 +96,7 @@ func runProjectShow(cmd *cobra.Command, args []string) error {
 
 	project, err := loadProject(id)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("project", id)
 		}
 		return err
@@ -126,7 +128,7 @@ func runProjectDelete(cmd *cobra.Command, args []string) error {
 
 	project, err := loadProject(id)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return notFoundErr("project", id)
 		}
 		return err
@@ -152,48 +154,7 @@ func runProjectDelete(cmd *cobra.Command, args []string) error {
 // to a project ID, falling back to .bira walk-up discovery if not set.
 func resolveProject(cmd *cobra.Command) (string, error) {
 	flag, _ := cmd.Root().PersistentFlags().GetString("project")
-	return resolveProjectIDFromFlag(flag)
-}
-
-func resolveProjectIDFromFlag(flag string) (string, error) {
-	if flag != "" {
-		return flag, nil
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("get working directory: %w", err)
-	}
-	cfg, _, err := loadConfigFromDir(cwd)
-	if err != nil {
-		return "", err
-	}
-	return cfg.ProjectID, nil
-}
-
-func loadConfigFromDir(dir string) (*configData, string, error) {
-	cfgPath := dir
-	for {
-		path := filepath.Join(cfgPath, ".bira")
-		if store.Exists(path) {
-			var cfg configData
-			if err := store.LoadJSON(path, &cfg); err != nil {
-				return nil, "", err
-			}
-			return &cfg, cfgPath, nil
-		}
-		parent := filepath.Dir(cfgPath)
-		if parent == cfgPath {
-			break
-		}
-		cfgPath = parent
-	}
-	return nil, "", fmt.Errorf("no .bira config found (run 'bira init' first)")
-}
-
-type configData struct {
-	ProjectID            string `json:"project_id"`
-	ProjectName          string `json:"project_name"`
-	ClaimTimeoutMinutes  int    `json:"claim_timeout_minutes,omitempty"`
+	return config.ResolveProjectID(flag)
 }
 
 func loadProject(id string) (*models.Project, error) {
@@ -209,21 +170,19 @@ func loadProject(id string) (*models.Project, error) {
 }
 
 // loadClaimTimeout returns the claim timeout minutes from the .bira config in the
-// current working directory, falling back to defaultClaimTimeout (1440).
+// current working directory, falling back to config.DefaultClaimTimeoutMinutes.
 func loadClaimTimeout(_ *cobra.Command) int {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return defaultClaimTimeout
+		return config.DefaultClaimTimeoutMinutes
 	}
-	cfg, _, err := loadConfigFromDir(cwd)
+	cfg, _, err := config.Load(cwd)
 	if err != nil {
-		return defaultClaimTimeout
+		return config.DefaultClaimTimeoutMinutes
 	}
 	if cfg.ClaimTimeoutMinutes > 0 {
 		return cfg.ClaimTimeoutMinutes
 	}
-	return defaultClaimTimeout
+	return config.DefaultClaimTimeoutMinutes
 }
-
-const defaultClaimTimeout = 1440
 

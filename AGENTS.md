@@ -4,7 +4,7 @@ This document codifies the workflow for agents developing bira features.
 
 ## Pre-Implementation Gate
 
-**Do NOT write any code until all three steps below are complete.** Skipping this gate means
+**Do NOT write any code until all four steps below are complete.** Skipping this gate means
 work is untracked and untraceable — do not proceed past this section without confirming each item.
 
 - [ ] `bira feature add` — feature created, ID captured

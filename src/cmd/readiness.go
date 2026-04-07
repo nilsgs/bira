@@ -98,17 +98,3 @@ func computeReadiness(
 
 	return r
 }
-
-// resolvedDeps builds the resolved dependency list for task show.
-func resolvedDeps(task models.Task, allTasksByID map[string]models.Task) []ResolvedDep {
-	deps := make([]ResolvedDep, 0, len(task.DependsOn))
-	for _, depID := range task.DependsOn {
-		dep, ok := allTasksByID[depID]
-		if !ok {
-			deps = append(deps, ResolvedDep{ID: depID, Exists: false})
-		} else {
-			deps = append(deps, ResolvedDep{ID: depID, Exists: true, Status: dep.Status, Title: dep.Title})
-		}
-	}
-	return deps
-}
