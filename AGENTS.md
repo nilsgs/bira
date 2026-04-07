@@ -89,6 +89,20 @@ For each completed task:
 
    **Green tests are mandatory** — only commit code that passes all tests. If tests fail, update the implementation until all tests pass.
 
+4a. **Update smoko specs**
+
+   If the task added, changed, or removed CLI commands or flags, update the relevant spec file in `specs/`:
+
+   - `specs/init.smoko` — `bira init`
+   - `specs/context.smoko` — `bira context`
+   - `specs/project.smoko` — `bira project`
+   - `specs/feature.smoko` — `bira feature`
+   - `specs/task.smoko` — `bira task`
+   - `specs/session.smoko` — `bira session`
+
+   Add new scenarios for new behaviours. Update or remove scenarios for changed/removed behaviours.
+   See the **smoko skill** for the spec DSL.
+
 > **STOP after each task.** Complete steps 1–5 fully for one task before starting the next.
 > One task = one commit + one `bira task done`. Do not batch across tasks.
 
@@ -147,13 +161,19 @@ See the **findings skill** for the template and guidance.
 
 Once all tasks are done:
 
-1. **Verify tests are comprehensive and green**
+1. **Verify tests and smoko specs are comprehensive and green**
 
    New functionality must be covered by tests. Run the full suite:
    ```bash
    make test-local
    ```
    Only proceed when all tests pass. If any fail, fix the implementation first.
+
+   Then run the full smoko suite to catch any regressions in CLI behaviour:
+   ```bash
+   make smoko
+   ```
+   All scenarios must pass. If any fail, fix the implementation or update the specs before proceeding.
 
 2. **Update README.md**
 
@@ -202,9 +222,12 @@ Loop:
   bira task update --status in-progress
   implement work
   run tests (must be green)
+  update specs/  (add/change/remove smoko scenarios to match behaviour)
   git commit -m "feat(<id>): ... - <task-id> <task name>\n\n<description>\n\nChanges:\n- ...\n\nCompletes task: <task-id>\nFeature: <feature-id> <feature-name>"
   bira task done
 Record findings in findings/<id>-<name>.md
+make test-local           (all unit tests green)
+make smoko                (all smoke specs green — catches regressions)
 bira feature update --status done
 git push
 ```

@@ -1,0 +1,12 @@
+FROM golang:1.26 AS builder
+
+WORKDIR /build
+COPY src/ .
+RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /bira .
+
+FROM alpine:latest
+
+RUN apk add --no-cache bash
+COPY --from=builder /bira /usr/local/bin/bira
+
+WORKDIR /smoko-work

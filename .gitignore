@@ -33,5 +33,8 @@ Thumbs.db
 # bira data (local config written by bira init)
 .bira
 
+# Docker files
+!Dockerfile.test
+
 # Skills
 !.agents/skills/**
