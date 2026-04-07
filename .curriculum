@@ -1,7 +1,9 @@
 {
   "version": "0.3.0",
   "skills": [
-    { "name": "bira" }
+    {
+      "name": "bira"
+    }
   ],
   "dependencies": [
     {
@@ -9,6 +11,9 @@
     },
     {
       "name": "curriculum"
+    },
+    {
+      "name": "bira"
     }
   ]
 }
