@@ -1,162 +1,115 @@
 Feature: bira feature
 
+  Background:
+    Given I run "bira init --name test-project"
+
   Scenario: Feature add creates a feature
-    When I run "sh -c 'bira init --name feat-proj > /dev/null && bira feature add my-feature'"
+    When I run "bira feature add my-feature"
     Then exit code is 0
     And output contains "Created feature"
     And output contains "my-feature"
 
   Scenario: Feature add --json returns structured output
-    When I run "sh -c 'bira init --name feat-json > /dev/null && bira feature add json-feat --json'"
+    When I run "bira feature add json-feat --json"
     Then exit code is 0
-    And output contains "\"name\": \"json-feat\""
-    And output contains "\"status\": \"todo\""
+    And output as JSON at path "$.name" equals "json-feat"
+    And output as JSON at path "$.status" equals "todo"
 
   Scenario: Feature add with --desc and --assign
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      bira init --name feat-flags > /dev/null
-      bira feature add flagged --desc "a description" --assign agent1 --json
-    When I run "sh run.sh"
+    When I run "bira feature add flagged --desc 'a description' --assign agent1 --json"
     Then exit code is 0
-    And output contains "\"description\": \"a description\""
-    And output contains "\"assigned_to\": \"agent1\""
+    And output as JSON at path "$.description" equals "a description"
+    And output as JSON at path "$.assigned_to" equals "agent1"
 
   Scenario: Feature add with --tags
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      bira init --name feat-tags > /dev/null
-      bira feature add tagged --tags "a,b,c" --json
-    When I run "sh run.sh"
+    When I run "bira feature add tagged --tags 'a,b,c' --json"
     Then exit code is 0
-    And output contains "\"tags\":"
+    And output as JSON at path "$.tags" exists
 
   Scenario: Feature list shows features
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      bira init --name flist > /dev/null
-      bira feature add feat-one > /dev/null
-      bira feature list
-    When I run "sh run.sh"
+    Given I run "bira feature add feat-one"
+    When I run "bira feature list"
     Then exit code is 0
     And output contains "feat-one"
 
   Scenario: Feature list --json returns array
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      bira init --name flist-json > /dev/null
-      bira feature add listed --json > /dev/null
-      bira feature list --json
-    When I run "sh run.sh"
+    Given I run "bira feature add listed"
+    When I run "bira feature list --json"
     Then exit code is 0
-    And output contains "\"name\": \"listed\""
+    And output contains "listed"
 
   Scenario: Feature list --status filters by status
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      bira init --name fstatus > /dev/null
-      bira feature add open-feat > /dev/null
-      bira feature list --status todo
-    When I run "sh run.sh"
+    Given I run "bira feature add open-feat"
+    When I run "bira feature list --status todo"
     Then exit code is 0
     And output contains "open-feat"
 
   Scenario: Feature list --status with invalid value fails
-    When I run "sh -c 'bira init --name fbadstatus > /dev/null && bira feature list --status invalid'"
+    When I run "bira feature list --status invalid"
     Then exit code is not 0
 
   Scenario: Feature show displays feature details
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name fshow > /dev/null
-      FID=$(bira feature add show-me --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira feature show "$FID"
-    When I run "sh run.sh"
+    Given I run "bira feature add show-me --json"
+    And I save JSON path "$.id" as $FID
+    When I run "bira feature show $FID"
     Then exit code is 0
     And output contains "show-me"
     And output contains "ID:"
     And output contains "Status:"
 
   Scenario: Feature show --json returns structured output
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name fshow-json > /dev/null
-      FID=$(bira feature add show-json --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira feature show "$FID" --json
-    When I run "sh run.sh"
+    Given I run "bira feature add show-json --json"
+    And I save JSON path "$.id" as $FID
+    When I run "bira feature show $FID --json"
     Then exit code is 0
-    And output contains "\"name\": \"show-json\""
+    And output as JSON at path "$.name" equals "show-json"
 
   Scenario: Feature show unknown ID returns exit 2
-    When I run "sh -c 'bira init --name fshow-err > /dev/null && bira feature show deadbeef'"
+    When I run "bira feature show deadbeef"
     Then exit code is 2
 
   Scenario: Feature update changes status
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name fupdate > /dev/null
-      FID=$(bira feature add to-update --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira feature update "$FID" --status in-progress --json
-    When I run "sh run.sh"
+    Given I run "bira feature add to-update --json"
+    And I save JSON path "$.id" as $FID
+    When I run "bira feature update $FID --status in-progress --json"
     Then exit code is 0
-    And output contains "\"status\": \"in-progress\""
+    And output as JSON at path "$.status" equals "in-progress"
 
   Scenario: Feature update with invalid status fails
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name fupdate-bad > /dev/null
-      FID=$(bira feature add upd-bad --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira feature update "$FID" --status nonsense
-    When I run "sh run.sh"
+    Given I run "bira feature add upd-bad --json"
+    And I save JSON path "$.id" as $FID
+    When I run "bira feature update $FID --status nonsense"
     Then exit code is not 0
 
   Scenario: Feature delete removes feature
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name fdel > /dev/null
-      FID=$(bira feature add to-delete --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira feature delete "$FID"
-    When I run "sh run.sh"
+    Given I run "bira feature add to-delete --json"
+    And I save JSON path "$.id" as $FID
+    When I run "bira feature delete $FID"
     Then exit code is 0
     And output contains "Deleted feature"
 
   Scenario: Feature delete with tasks requires --move-tasks-to
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name fdel-tasks > /dev/null
-      FID=$(bira feature add has-tasks --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira task add a-task --feature "$FID" > /dev/null
-      bira feature delete "$FID"
-    When I run "sh run.sh"
+    Given I run "bira feature add has-tasks --json"
+    And I save JSON path "$.id" as $FID
+    Given I run "bira task add a-task --feature $FID"
+    When I run "bira feature delete $FID"
     Then exit code is not 0
     And stderr contains "--move-tasks-to"
 
   Scenario: Feature delete with --move-tasks-to reassigns tasks
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name fdel-move > /dev/null
-      FID=$(bira feature add source-feat --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      TID=$(bira feature add target-feat --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira task add move-me --feature "$FID" > /dev/null
-      bira feature delete "$FID" --move-tasks-to "$TID"
-    When I run "sh run.sh"
+    Given I run "bira feature add source-feat --json"
+    And I save JSON path "$.id" as $FID
+    Given I run "bira feature add target-feat --json"
+    And I save JSON path "$.id" as $TID
+    Given I run "bira task add move-me --feature $FID"
+    When I run "bira feature delete $FID --move-tasks-to $TID"
     Then exit code is 0
     And output contains "Deleted feature"
 
   Scenario: Feature note adds a note to a feature
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name fnote > /dev/null
-      FID=$(bira feature add to-note --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira feature note "$FID" "my note here"
-    When I run "sh run.sh"
+    Given I run "bira feature add to-note --json"
+    And I save JSON path "$.id" as $FID
+    When I run "bira feature note $FID 'my note here'"
     Then exit code is 0
     And output contains "Note added"
+

@@ -147,9 +147,9 @@ cd my-project
 cur init
 
 # 3. Install the skill
-cur install external-skill              # Latest version
+cur install external-skill              # Latest version, saved to .curriculum
 cur install external-skill@1.2.0        # Specific version
-cur install external-skill --save       # Also update .curriculum
+cur install external-skill --no-save    # Skip updating .curriculum
 
 # 4. Verify it's installed
 ls -la .agents/skills/external-skill/
@@ -190,7 +190,7 @@ cur push my-skill
 # → Published to ~/.curriculum/repository/my-skill/2.0.0/
 
 # 4. Other repos can now install it
-cur install my-skill@2.0.0 --save
+cur install my-skill@2.0.0
 ```
 
 ---
@@ -232,15 +232,16 @@ Install skills from the central repository.
 cur install                             # Install all dependencies from .curriculum
 cur install my-skill                    # Install latest version of one skill
 cur install my-skill@1.2.0              # Install specific version
-cur install my-skill --save             # Also update .curriculum dependencies
+cur install my-skill --no-save          # Skip updating .curriculum dependencies
 cur install my-skill --global           # Install to ~/.agents/skills/ (personal)
-cur install my-skill@1.0.0 --save --global  # Combine flags
+cur install my-skill@1.0.0 --no-save --global  # Combine flags
 ```
 
 **Behavior:**
 - Default destination: `.agents/skills/<name>/` (repo-local)
 - `--global`: destination is `~/.agents/skills/<name>/` (personal, shared across repos)
-- `--save`: automatically adds/updates the skill in `.curriculum` `dependencies[]`
+- By default, automatically adds/updates the skill in `.curriculum` `dependencies[]`
+- `--no-save`: skips updating `.curriculum`
 - If version is omitted, installs the latest available version
 
 ### `cur remove`
@@ -248,9 +249,9 @@ cur install my-skill@1.0.0 --save --global  # Combine flags
 Remove an installed skill.
 
 ```bash
-cur remove my-skill                     # Remove from .agents/skills/my-skill/
+cur remove my-skill                     # Remove and update .curriculum dependencies
 cur remove my-skill --global            # Remove from ~/.agents/skills/my-skill/
-cur remove my-skill --save              # Also remove from .curriculum dependencies
+cur remove my-skill --no-save           # Remove without updating .curriculum
 ```
 
 ### `cur list`

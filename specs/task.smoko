@@ -1,188 +1,288 @@
 Feature: bira task
 
+  Background:
+    Given I run "bira init --name test-project"
+
   Scenario: Task add creates a task in the backlog
-    When I run "sh -c 'bira init --name task-proj > /dev/null && bira task add my-task'"
+    When I run "bira task add my-task"
     Then exit code is 0
     And output contains "Created task"
     And output contains "my-task"
 
   Scenario: Task add --json returns structured output
-    When I run "sh -c 'bira init --name task-json > /dev/null && bira task add json-task --json'"
+    When I run "bira task add json-task --json"
     Then exit code is 0
-    And output contains "\"title\": \"json-task\""
-    And output contains "\"status\": \"todo\""
+    And output as JSON at path "$.title" equals "json-task"
+    And output as JSON at path "$.status" equals "todo"
 
   Scenario: Task add to a specific feature
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name task-feat > /dev/null
-      FID=$(bira feature add my-feat --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira task add feat-task --feature "$FID" --json
-    When I run "sh run.sh"
+    Given I run "bira feature add my-feat --json"
+    And I save JSON path "$.id" as $FID
+    When I run "bira task add feat-task --feature $FID --json"
     Then exit code is 0
-    And output contains "\"title\": \"feat-task\""
+    And output as JSON at path "$.title" equals "feat-task"
 
   Scenario: Task add to unknown feature fails
-    When I run "sh -c 'bira init --name task-badfeat > /dev/null && bira task add orphan --feature deadbeef'"
+    When I run "bira task add orphan --feature deadbeef"
     Then exit code is 2
 
   Scenario: Task add with --desc, --assign, --tags
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      bira init --name task-flags > /dev/null
-      bira task add flagged-task --desc "detailed desc" --assign agent42 --tags "x,y" --json
-    When I run "sh run.sh"
+    When I run "bira task add flagged-task --desc 'detailed desc' --assign agent42 --tags 'x,y' --json"
     Then exit code is 0
-    And output contains "\"description\": \"detailed desc\""
-    And output contains "\"assigned_to\": \"agent42\""
+    And output as JSON at path "$.description" equals "detailed desc"
+    And output as JSON at path "$.assigned_to" equals "agent42"
+
+  Scenario: Task add --files attaches file references
+    When I run "bira task add file-task --files 'a.go,b.go' --json"
+    Then exit code is 0
+    And output as JSON at path "$.files[0]" equals "a.go"
+    And output as JSON at path "$.files[1]" equals "b.go"
 
   Scenario: Task list shows tasks
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      bira init --name tlist > /dev/null
-      bira task add task-alpha > /dev/null
-      bira task list
-    When I run "sh run.sh"
+    Given I run "bira task add task-alpha"
+    When I run "bira task list"
     Then exit code is 0
     And output contains "task-alpha"
 
   Scenario: Task list --json returns array
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      bira init --name tlist-json > /dev/null
-      bira task add beta-task > /dev/null
-      bira task list --json
-    When I run "sh run.sh"
+    Given I run "bira task add beta-task"
+    When I run "bira task list --json"
     Then exit code is 0
-    And output contains "\"title\": \"beta-task\""
+    And output contains "beta-task"
 
   Scenario: Task list --ready shows only ready tasks
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name tready > /dev/null
-      bira task add incomplete-task > /dev/null
-      bira task add ready-task --desc "has desc" --assign agent1 --criteria "done" --json > /dev/null
-      bira task list --ready
-    When I run "sh run.sh"
+    Given I run "bira task add incomplete-task"
+    Given I run "bira task add ready-task --desc 'has desc' --criteria done --json"
+    When I run "bira task list --ready"
     Then exit code is 0
     And output contains "ready-task"
 
   Scenario: Task list --status filters by status
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name tstatus > /dev/null
-      TID=$(bira task add in-prog-task --desc "d" --assign a1 --criteria "c" --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira task update "$TID" --status in-progress > /dev/null
-      bira task list --status in-progress
-    When I run "sh run.sh"
+    Given I run "bira task add in-prog-task --desc d --criteria c --json"
+    And I save JSON path "$.id" as $TID
+    Given I run "bira task update $TID --status in-progress"
+    When I run "bira task list --status in-progress"
     Then exit code is 0
     And output contains "in-prog-task"
 
   Scenario: Task list --feature filters by feature
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name tfeat-list > /dev/null
-      FID=$(bira feature add my-feat --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira task add feat-only-task --feature "$FID" > /dev/null
-      bira task add other-task > /dev/null
-      bira task list --feature "$FID"
-    When I run "sh run.sh"
+    Given I run "bira feature add my-feat --json"
+    And I save JSON path "$.id" as $FID
+    Given I run "bira task add feat-only-task --feature $FID"
+    Given I run "bira task add other-task"
+    When I run "bira task list --feature $FID"
     Then exit code is 0
     And output contains "feat-only-task"
 
+  Scenario: Task list --assigned filters by assignee
+    Given I run "bira task add assigned-task --assign agent1"
+    Given I run "bira task add other-task"
+    When I run "bira task list --assigned agent1"
+    Then exit code is 0
+    And output contains "assigned-task"
+
+  Scenario: Task list --unassigned shows only unassigned tasks
+    Given I run "bira task add assigned-task --assign agent1"
+    Given I run "bira task add unassigned-task"
+    When I run "bira task list --unassigned"
+    Then exit code is 0
+    And output contains "unassigned-task"
+
+  Scenario: Task list --claimed-by filters to tasks claimed by session
+    Given I run "bira task add claim-filter-task --desc d --criteria c --json"
+    And I save JSON path "$.id" as $TID
+    Given I run "bira session start --json"
+    And I save JSON path "$.id" as $SID
+    Given I run "bira task claim $TID --session $SID"
+    When I run "bira task list --claimed-by $SID"
+    Then exit code is 0
+    And output contains "claim-filter-task"
+
+  Scenario: Task list --unclaimed excludes claimed tasks
+    Given I run "bira task add unclaimed-task --desc d --criteria c --json"
+    And I save JSON path "$.id" as $TID1
+    Given I run "bira task add claimed-task --desc d --criteria c --json"
+    And I save JSON path "$.id" as $TID2
+    Given I run "bira session start --json"
+    And I save JSON path "$.id" as $SID
+    Given I run "bira task claim $TID2 --session $SID"
+    When I run "bira task list --unclaimed"
+    Then exit code is 0
+    And output contains "unclaimed-task"
+
   Scenario: Task show displays task details
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name tshow > /dev/null
-      TID=$(bira task add show-task --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira task show "$TID"
-    When I run "sh run.sh"
+    Given I run "bira task add show-task --json"
+    And I save JSON path "$.id" as $TID
+    When I run "bira task show $TID"
     Then exit code is 0
     And output contains "show-task"
     And output contains "ID:"
     And output contains "Status:"
 
   Scenario: Task show unknown ID returns exit 2
-    When I run "sh -c 'bira init --name tshow-err > /dev/null && bira task show deadbeef'"
+    When I run "bira task show deadbeef"
     Then exit code is 2
 
   Scenario: Task update changes status
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name tupdate > /dev/null
-      TID=$(bira task add to-update --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira task update "$TID" --status blocked --json
-    When I run "sh run.sh"
+    Given I run "bira task add to-update --json"
+    And I save JSON path "$.id" as $TID
+    When I run "bira task update $TID --status blocked --json"
     Then exit code is 0
-    And output contains "\"status\": \"blocked\""
+    And output as JSON at path "$.status" equals "blocked"
 
   Scenario: Task update with invalid status fails
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name tupdate-bad > /dev/null
-      TID=$(bira task add bad-upd --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira task update "$TID" --status nonsense
-    When I run "sh run.sh"
+    Given I run "bira task add bad-upd --json"
+    And I save JSON path "$.id" as $TID
+    When I run "bira task update $TID --status nonsense"
     Then exit code is not 0
 
+  Scenario: Task update --files sets file references
+    Given I run "bira task add file-task --json"
+    And I save JSON path "$.id" as $TID
+    When I run "bira task update $TID --files 'a.go,b.go' --json"
+    Then exit code is 0
+    And output as JSON at path "$.files[0]" equals "a.go"
+
+  Scenario: Task update --criteria replaces acceptance criteria
+    Given I run "bira task add criteria-task --criteria old-criterion --json"
+    And I save JSON path "$.id" as $TID
+    When I run "bira task update $TID --criteria new-criterion --json"
+    Then exit code is 0
+    And output as JSON at path "$.acceptance_criteria[0]" equals "new-criterion"
+
+  Scenario: Task update --depends-on sets dependency list
+    Given I run "bira task add dep-task --json"
+    And I save JSON path "$.id" as $DEP
+    Given I run "bira task add main-task --json"
+    And I save JSON path "$.id" as $TID
+    When I run "bira task update $TID --depends-on $DEP --json"
+    Then exit code is 0
+    And output as JSON at path "$.depends_on[0]" exists
+
+  Scenario: Task update --status fails if task is claimed
+    Given I run "bira task add locked-task --desc d --criteria c --json"
+    And I save JSON path "$.id" as $TID
+    Given I run "bira session start --json"
+    And I save JSON path "$.id" as $SID
+    Given I run "bira task claim $TID --session $SID"
+    When I run "bira task update $TID --status blocked"
+    Then exit code is not 0
+    And stderr contains "claimed"
+
   Scenario: Task done marks task as done
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name tdone > /dev/null
-      TID=$(bira task add to-finish --desc "d" --assign a1 --criteria "c" --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira task done "$TID"
-    When I run "sh run.sh"
+    Given I run "bira task add to-finish --desc d --criteria c --json"
+    And I save JSON path "$.id" as $TID
+    When I run "bira task done $TID"
     Then exit code is 0
     And output contains "done"
 
   Scenario: Task done --json returns updated task
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name tdone-json > /dev/null
-      TID=$(bira task add finish-json --desc "d" --assign a1 --criteria "c" --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira task done "$TID" --json
-    When I run "sh run.sh"
+    Given I run "bira task add finish-json --desc d --criteria c --json"
+    And I save JSON path "$.id" as $TID
+    When I run "bira task done $TID --json"
     Then exit code is 0
-    And output contains "\"status\": \"done\""
+    And output as JSON at path "$.status" equals "done"
 
   Scenario: Task delete removes task
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name tdel > /dev/null
-      TID=$(bira task add to-delete --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira task delete "$TID"
-    When I run "sh run.sh"
+    Given I run "bira task add to-delete --json"
+    And I save JSON path "$.id" as $TID
+    When I run "bira task delete $TID"
     Then exit code is 0
     And output contains "Deleted task"
 
+  Scenario: Task delete fails if another task depends on it
+    Given I run "bira task add dep-task --json"
+    And I save JSON path "$.id" as $DEP
+    Given I run "bira task add blocker-task --depends-on $DEP"
+    When I run "bira task delete $DEP"
+    Then exit code is not 0
+    And stderr contains "referenced by"
+
   Scenario: Task note appends a note
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name tnote > /dev/null
-      TID=$(bira task add to-note --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira task note "$TID" "important note"
-    When I run "sh run.sh"
+    Given I run "bira task add to-note --json"
+    And I save JSON path "$.id" as $TID
+    When I run "bira task note $TID 'important note'"
     Then exit code is 0
     And output contains "Note added"
 
   Scenario: Task with dependencies blocks readiness until dep is done
-    Given a file "run.sh" with content:
-      #!/bin/sh
-      set -e
-      bira init --name tdeps > /dev/null
-      DEP=$(bira task add dep-task --desc "d" --assign a1 --criteria "c" --json | grep -o '"id": "[^"]*"' | head -1 | sed 's/"id": "\(.*\)"/\1/')
-      bira task add blocked-task --depends-on "$DEP" --desc "d" --assign a1 --criteria "c" --json
-    When I run "sh run.sh"
+    Given I run "bira task add dep-task --desc d --criteria c --json"
+    And I save JSON path "$.id" as $DEP
+    When I run "bira task add blocked-task --depends-on $DEP --desc d --criteria c --json"
     Then exit code is 0
-    And output contains "\"depends_on\":"
+    And output as JSON at path "$.depends_on" exists
+
+  Scenario: Task claim marks task as in-progress
+    Given I run "bira session start --label claim-agent --json"
+    And I save JSON path "$.id" as $SID
+    Given I run "bira task add claim-task --desc d --assign claim-agent --criteria c --json"
+    And I save JSON path "$.id" as $TID
+    When I run "bira task claim $TID --session $SID --json"
+    Then exit code is 0
+    And output as JSON at path "$.status" equals "in-progress"
+    And output as JSON at path "$.claimed_by" exists
+
+  Scenario: Task claim without session ID fails
+    Given I run "bira task add t1 --desc d --assign a --criteria c --json"
+    And I save JSON path "$.id" as $TID
+    When I run "bira task claim $TID"
+    Then exit code is not 0
+
+  Scenario: Task claim on non-ready task fails
+    Given I run "bira session start --label nr-agent --json"
+    And I save JSON path "$.id" as $SID
+    Given I run "bira task add not-ready-task --json"
+    And I save JSON path "$.id" as $TID
+    When I run "bira task claim $TID --session $SID"
+    Then exit code is not 0
+
+  Scenario: Task claim --force overrides assigned_to mismatch
+    Given I run "bira session start --label my-agent --json"
+    And I save JSON path "$.id" as $SID
+    Given I run "bira task add assigned-task --desc d --assign other-agent --criteria c --json"
+    And I save JSON path "$.id" as $TID
+    When I run "bira task claim $TID --session $SID --force --json"
+    Then exit code is 0
+    And output as JSON at path "$.status" equals "in-progress"
+
+  Scenario: Task release returns task to pool
+    Given I run "bira session start --label rel-agent --json"
+    And I save JSON path "$.id" as $SID
+    Given I run "bira task add rel-task --desc d --assign rel-agent --criteria c --json"
+    And I save JSON path "$.id" as $TID
+    Given I run "bira task claim $TID --session $SID"
+    When I run "bira task release $TID --session $SID --json"
+    Then exit code is 0
+    And output as JSON at path "$.status" equals "todo"
+
+  Scenario: Task release --status blocked sets task to blocked
+    Given I run "bira session start --json"
+    And I save JSON path "$.id" as $SID
+    Given I run "bira task add blocked-release-task --desc d --criteria c --json"
+    And I save JSON path "$.id" as $TID
+    Given I run "bira task claim $TID --session $SID"
+    When I run "bira task release $TID --session $SID --status blocked --json"
+    Then exit code is 0
+    And output as JSON at path "$.status" equals "blocked"
+
+  Scenario: Task release --note appends a note on release
+    Given I run "bira session start --json"
+    And I save JSON path "$.id" as $SID
+    Given I run "bira task add note-task --desc d --criteria c --json"
+    And I save JSON path "$.id" as $TID
+    Given I run "bira task claim $TID --session $SID"
+    When I run "bira task release $TID --session $SID --note 'releasing for now' --json"
+    Then exit code is 0
+    And output as JSON at path "$.notes[0].body" equals "releasing for now"
+
+  Scenario: Task release --force releases task claimed by another session
+    Given I run "bira session start --label session-a --json"
+    And I save JSON path "$.id" as $SID_A
+    Given I run "bira session start --label session-b --json"
+    And I save JSON path "$.id" as $SID_B
+    Given I run "bira task add force-task --desc d --criteria c --json"
+    And I save JSON path "$.id" as $TID
+    Given I run "bira task claim $TID --session $SID_A"
+    When I run "bira task release $TID --session $SID_B --force --json"
+    Then exit code is 0
+    And output as JSON at path "$.status" equals "todo"

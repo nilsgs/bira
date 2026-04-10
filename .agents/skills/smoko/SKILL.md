@@ -1,269 +1,358 @@
 ---
 name: smoko
-description: "Teaches agents how to write, understand, and execute smoko BDD-style smoke tests for CLI applications. Covers DSL syntax, step types, assertions, and common testing patterns. Smoko is a platform-agnostic tool that runs tests in isolated Docker containers."
-compatibility: "Requires smoko CLI and Docker"
-metadata:
-  category: "testing"
-  tags: "smoke-tests, bdd, gherkin, cli-testing, docker, testing-tools"
+description: "Write, review, and debug Smoko `.smoko` smoke tests for CLI applications. Use when the agent needs to create or update Given/When/Then scenarios, explain supported DSL clauses, add assertions, structure shared setup with Background, or troubleshoot Smoko test failures running in Docker containers."
 ---
 
-# Smoko User Guide
+# Smoko
 
-Smoko is a platform-agnostic smoke testing tool for CLI applications. It allows you to write BDD-style test specifications in `.smoko` files and execute them in isolated Docker containers with comprehensive assertions.
+Use this guide to write correct Smoko scenarios and stay within the DSL the tool actually supports.
 
-## What is Smoko?
+## Core model
 
-**Core capabilities:**
-- Write human-readable BDD-style tests using Gherkin-inspired syntax
-- Test any CLI tool in any language
-- Execute tests in isolated Docker containers for consistent, repeatable results
-- Comprehensive assertions: exit codes, output matching (regex), file system checks
-- Works consistently on Windows, macOS, and Linux
+- Treat each `Scenario` as one isolated test run in a fresh Docker container.
+- Use `Background` for setup shared by every scenario in the feature.
+- Expect the working directory inside the container to be `/smoko-work`.
+- Execute `Given` steps in source order.
+- Use a single `When` step as the action under test.
+- Use `Then` and inherited `And` or `But` steps for assertions. `And`/`But` inherit their type from the preceding keyword (`Given`, `When`, or `Then`).
 
-**Why use Smoko?**
-- **Readable**: Tests read like documentation (Given/When/Then structure)
-- **Isolated**: Each scenario runs in a fresh Docker container, no side effects
-- **Comprehensive**: Assert on exit codes, stdout, stderr, file content, directory structure
-- **Language-agnostic**: Test any CLI tool regardless of language
-- **Flexible image support**: Use any Docker image that contains your CLI tool
+## Supported structure
 
-## Core Concepts
-
-### Feature
-A `.smoko` file begins with a Feature declaration that groups related scenarios.
-
-```
+```gherkin
 Feature: Feature Name
-  Optional description of what this feature tests
-  
-  Image: docker-image:tag
+  Optional description
+
+  Image: alpine:latest
+
+  Background:
+    Given a file "config.txt" with content:
+      default configuration
+
+  Scenario: Scenario name
+    Given environment variable "MODE" is set to "test"
+    When I run "my-cli"
+    Then exit code is 0
 ```
 
-The optional `Image:` line specifies which Docker image to use as the container for all scenarios in the feature. This can be overridden via CLI flags or `.smokorc` configuration.
+Image resolution precedence:
+1. `--image`
+2. `Image:` in the `.smoko` file
+3. `.smokorc`
 
-### Background (Optional)
-A Background section defines setup steps that run before each scenario in the feature. All Background steps are treated as Given steps (setup).
+## Given
 
-```
-Background:
-  Given environment variable "VAR" is set to "value"
-  Given a file "config.txt" with content:
-    default configuration
-```
+Use `Given` for setup only.
 
-Background is useful for common setup shared across multiple scenarios.
+### Create a file with content
 
-### Scenario
-A scenario is a single test case that follows the Given/When/Then structure:
-
-```
-Scenario: Scenario description
-  Given [one or more setup steps]
-  When [single action step]
-  Then [one or more assertion steps]
-```
-
-Each scenario:
-1. Runs in a fresh Docker container (isolated from other scenarios)
-2. Has its own working directory (`/smoko-work` inside the container)
-3. Executes Given steps in order to set up the environment
-4. Executes the When step and captures output, exit code, and stderr
-5. Evaluates Then steps as assertions against the captured output
-
-### Steps
-Steps are the building blocks of scenarios. Each step has a type (Given, When, Then) and text that defines the action or assertion.
-
-**Step types:**
-- **Given** — Setup: create files, set environment variables, create directories, etc.
-- **When** — Action: run a command and capture its output, exit code, and stderr
-- **Then/And** — Assertion: verify the result (exit code, output, files, etc.)
-
-**Step modifiers:**
-- **And** — Continues the previous step type (And after Given is a Given; And after Then is a Then)
-- **But** — Negation modifier (but rare in practice)
-
-### Multi-line Content
-Given steps that create files support multi-line indented content:
-
-```
-Given a file "script.sh" with content:
-  #!/bin/bash
-  echo "Hello"
-```
-
-All indented lines following the step are treated as the file content. Comments (`#`) inside indented blocks are treated as content, not as comments.
-
-## DSL Reference
-
-### Given Steps (Setup)
-
-#### Create a file with content
-```
+```gherkin
 Given a file "path/to/file.txt" with content:
-  multiline
-  content
-  here
+  line 1
+  line 2
 ```
 
-Creates a file at the specified path inside the container with the provided content.
+### Create an empty file
 
-#### Create an empty file
-```
+```gherkin
 Given a file "path/to/file.txt" exists
 ```
 
-Creates an empty file at the specified path.
+### Create a directory
 
-#### Create a directory
-```
+```gherkin
 Given the directory "path/to/dir" exists
 ```
 
-Creates a directory (including parents) at the specified path.
+### Set the working directory
 
-#### Set environment variable
+```gherkin
+Given the working directory is "path/to/subdir"
 ```
+
+Behavior:
+- Changes the working directory for all subsequent `Given I run` and `When I run` steps in the scenario.
+- The path is relative to the scenario root (`/smoko-work`); resolved as `/smoko-work/<path>`.
+- The directory must already exist; if not, the scenario fails immediately with a clear error.
+- Resets to `/smoko-work` automatically at the start of each new scenario.
+- `Then` file and directory assertions always use paths relative to `/smoko-work`, regardless of this step.
+
+Use this step when the CLI under test needs to run from a subdirectory (e.g., a tool that walks up to find a project root):
+
+```gherkin
+Scenario: Detects repo root from nested directory
+  Given the directory "src/App" exists
+  Given a file "src/App/App.csproj" with content:
+    <Project Sdk="Microsoft.NET.Sdk" />
+  Given the working directory is "src/App"
+  When I run "mycli status"
+  Then exit code is 0
+  Then file "src/App/App.csproj" exists
+```
+
+### Set an environment variable
+
+```gherkin
 Given environment variable "VAR_NAME" is set to "value"
 ```
 
-Sets an environment variable that will be available when the When step runs.
+### Run a setup command
 
-#### Empty working directory
+```gherkin
+Given I run "cp source.txt target.txt"
 ```
-Given an empty working directory
+
+Behavior:
+- Run the command in `/smoko-work`.
+- Source `.smoko_env` first if it exists.
+- Fail the scenario immediately if the command exits non-zero.
+- Use this for imperative setup, not for the main behavior under test.
+
+### Capture output into a variable
+
+Immediately after a `Given I run` step, save the output (or part of it) into an environment variable for use in subsequent steps.
+
+```gherkin
+# Save trimmed stdout as a variable
+Given I run "my-cli version"
+And I save output as $VERSION
+
+# Save a JSON field from stdout
+Given I run "my-cli info --json"
+And I save JSON path "$.version" as $VERSION
+
+# Save a regex capture group (first group)
+Given I run "my-cli version"
+And I save pattern "v([0-9.]+)" as $VERSION
 ```
 
-Clears any existing files in the container's `/smoko-work` directory (rarely needed, as each scenario gets a fresh container).
+The variable is written to `.smoko_env` immediately, making it available to subsequent `Given I run`, `When I run`, and file content steps via shell expansion.
 
-### When Steps (Action)
+Save steps must immediately follow a `Given I run` step. Multiple saves after the same run are allowed:
 
-#### Run a command
+```gherkin
+Given I run "my-cli info --json"
+And I save JSON path "$.name" as $APP_NAME
+And I save JSON path "$.version" as $APP_VERSION
 ```
+
+## When
+
+Use exactly one `When` step per scenario.
+
+### Run a command
+
+```gherkin
 When I run "command arg1 arg2"
 ```
 
-Executes the command in the container and captures stdout, stderr, and the exit code. The entire command string is executed as-is in the container's shell.
+### Run a command with stdin
 
-Only one When step is allowed per scenario. The When step captures:
-- **stdout** — All output written to standard output
-- **stderr** — All output written to standard error
-- **exit code** — The command's exit code (0 = success, non-zero = failure)
-
-### Then/And Steps (Assertions)
-
-#### Assert exit code
+```gherkin
+When I run "command" with input "stdin data"
 ```
+
+### Run a command with an expected exit code annotation
+
+```gherkin
+When I run "command" expecting exit code 1
+```
+
+`When` captures stdout, stderr, and exit code.
+
+## Then
+
+### Exit code
+
+```gherkin
 Then exit code is 0
 Then exit code is not 1
 ```
 
-Checks that the command's exit code matches (or doesn't match) the specified value.
+### Output contains text
 
-#### Assert output contains text
-```
+```gherkin
 Then output contains "expected text"
+Then output does not contain "error"
+Then stdout contains "expected stdout text"
+Then stderr contains "expected stderr text"
 ```
 
-Checks that stdout contains the exact specified text as a substring.
+### Output matches a regex pattern
 
-#### Assert output matches regex
-```
-Then output matches "^[a-zA-Z0-9]+@[a-z]+\.[a-z]+$"
-```
-
-Checks that stdout matches the provided regex pattern (Go `regexp` syntax, which is RE2 dialect). The regex must match the entire output.
-
-Tip: Use `(?s:.*)` for multiline matching when needed.
-
-#### Assert output line contains text
-```
-Then output line contains "text"
+```gherkin
+Then output matches pattern "version \\d+\\.\\d+\\.\\d+"
+Then stdout matches pattern "v\\d+\\.\\d+"
+Then stderr does not match pattern "panic:"
+Then file "output.log" matches pattern "^OK \\d+ tests$"
 ```
 
-Checks that at least one line in stdout contains the specified text.
+Use Go `regexp` syntax (RE2). Both `match` and `matches` are accepted.
 
-#### Assert stderr contains text
-```
-Then stderr contains "error message"
+### Output equals (exact match)
+
+```gherkin
+Then output equals "exact value"
+Then stdout equals "hello"
+Then stderr does not equal "something"
 ```
 
-Checks that stderr contains the specified text as a substring.
+Trims leading/trailing whitespace before comparing, so trailing newlines are ignored.
 
-#### Assert file exists
+### Empty / not empty
+
+```gherkin
+Then output is empty
+Then stderr is empty
+Then stdout is not empty
+Then file "out.txt" is empty
+Then file "out.txt" is not empty
 ```
+
+### JSONPath assertions
+
+```gherkin
+Then output as JSON at path "$.user.name" exists
+Then stdout as JSON at path "$.ok" equals true
+Then file "result.json" as JSON at path "$.items[0].id" equals 123
+Then file "result.json" as JSON at path "$.items" equals:
+  [1, 2, 3]
+```
+
+Rules:
+- Use dollar-style JSONPath such as `$.user.name`.
+- `equals` compares parsed JSON values, not stringified text.
+- Use JSON literals inline for scalars and compact values.
+- Use block JSON after `equals:` for arrays or objects.
+- `equals` requires the JSONPath to resolve to exactly one value.
+
+### File existence
+
+```gherkin
 Then file "path/to/file.txt" exists
+Then file "path/to/file.txt" does not exist
 ```
 
-Checks that the specified file exists in the container.
+### File content
 
-#### Assert file content
-```
+```gherkin
 Then file "path/to/file.txt" contains "expected content"
 Then file "path/to/file.txt" does not contain "unexpected text"
+Then file "path/to/file.txt" matches pattern "^\\d+\\.\\d+\\.\\d+$"
+Then file "path/to/file.txt" equals "exact content"
 ```
 
-Checks that the file contains (or does not contain) the specified text as a substring.
+Block form is also supported:
 
-For content with double quotes, escape them with `\"`:
-```
-Then file "config.json" contains "\"name\": \"value\""
-```
-
-For multi-line content, use the block form with a trailing `:`:
-```
-Then file ".curriculum" contains:
-  "dependencies": [
-    { "name": "dummy-skill" }
-  ]
+```gherkin
+Then file "config.json" contains:
+  "enabled": true
 ```
 
-Negation works with the block form too:
-```
-Then file ".curriculum" does not contain:
-  "version": "1.0.0"
-```
+### Directory existence
 
-#### Assert directory exists
-```
-Then the directory "path/to/dir" exists
-Then the directory "path/to/dir" does not exist
+```gherkin
+Then directory "path/to/dir" exists
+Then directory "path/to/dir" does not exist
 ```
 
-Checks that the specified directory exists (or does not exist) in the container.
+## Patterns
 
-## Common Patterns
+### Working directory for directory-aware CLIs
 
-### Testing CLI Output
+Use `Given the working directory is "..."` instead of `sh -c 'cd ... && ...'` in the `When` step:
 
+```gherkin
+# Before — embeds shell logic in the action step, POSIX-only:
+When I run "sh -c 'cd src/App && mycli bump --major'"
+
+# After — clean Given/When/Then separation:
+Given the working directory is "src/App"
+When I run "mycli bump --major"
 ```
-Scenario: CLI produces correct output
-  When I run "my-cli greet Alice"
+
+`Then` file paths remain relative to `/smoko-work` (the scenario root), not the working directory.
+
+### Sequential setup with variable capture
+
+Use `Given I run` + `And I save` to chain setup steps that depend on each other's output:
+
+```gherkin
+Scenario: Task added to a feature
+  Given I run "mycli init --name my-project"
+  Given I run "mycli feature add my-feature --json"
+    And I save JSON path "$.id" as $FID
+  When I run "mycli task add my-task --feature $FID --json"
   Then exit code is 0
-  Then output contains "Hello, Alice"
+  Then output as JSON at path "$.title" equals "my-task"
 ```
 
-### Testing Exit Codes
+Don't wrap sequential commands in `sh -c` chains when `Given I run` handles it directly.
 
+### Prefer JSONPath over substring matching for structured output
+
+```gherkin
+# Prefer this:
+Then output as JSON at path "$.title" equals "my-task"
+Then output as JSON at path "$.status" equals "todo"
+
+# Over this:
+Then output contains "\"title\": \"my-task\""
+Then output contains "\"status\": \"todo\""
 ```
-Scenario: CLI fails on invalid input
-  When I run "my-cli invalid"
+
+JSONPath is whitespace-independent, validates structure, and is more readable.
+
+### Always check both exit code and message for error cases
+
+```gherkin
+Scenario: Rejects invalid input
+  When I run "mycli process --format invalid"
   Then exit code is not 0
-  Then stderr contains "Invalid argument"
+  Then stderr contains "unsupported format"
 ```
 
-### Testing File Operations
+Checking only the exit code can mask wrong-reason failures.
 
+### Helper scripts in Docker images
+
+For complex test utilities, bake a helper script into the image rather than inlining shell logic in specs:
+
+```dockerfile
+# In Dockerfile.test
+COPY specs/helpers/seed.sh /usr/local/bin/seed
 ```
-Scenario: CLI creates output file
-  When I run "my-cli generate output.txt"
+
+```gherkin
+Given I run "seed init-repo myrepo"
+```
+
+This keeps specs readable and moves shell complexity into a maintainable script.
+
+### Shared setup in Background
+
+```gherkin
+Feature: Configured CLI
+  Background:
+    Given a file "config.json" with content:
+      {"mode":"test"}
+    Given I run "cp config.json config.local.json"
+```
+
+### Imperative setup before the main action
+
+```gherkin
+Scenario: CLI consumes generated artifact
+  Given a file "input.txt" with content:
+    hello from setup
+  Given I run "cp input.txt output.txt"
+  When I run "cat output.txt"
   Then exit code is 0
-  Then file "output.txt" exists
-  Then file "output.txt" contains "Generated content"
+  Then output contains "hello from setup"
 ```
 
-### Testing with Environment Variables
+### Environment-dependent behavior
 
-```
+```gherkin
 Scenario: CLI respects environment variables
   Given environment variable "DEBUG" is set to "true"
   When I run "my-cli start"
@@ -271,177 +360,46 @@ Scenario: CLI respects environment variables
   Then output contains "Debug mode enabled"
 ```
 
-### Testing Configuration Files
+## Debugging guidance
 
-```
-Scenario: CLI reads config file
-  Given a file "config.json" with content:
-    {
-      "timeout": 30,
-      "retries": 3
-    }
-  When I run "my-cli --config config.json"
-  Then exit code is 0
-```
+- If a `Given the working directory is` step fails, the directory does not yet exist in the container — add a `Given the directory "..." exists` step before it.
+- If a `Given` step fails before `When`, inspect the setup command or path assumptions first.
+- If a file assertion fails, remember paths are relative to `/smoko-work` unless explicitly absolute.
+- If regex assertions fail, verify the step uses `matches pattern`, not just `matches`.
+- If a JSON assertion fails, check whether the source is valid JSON, whether the JSONPath is valid, and whether `equals` matched exactly one node.
+- If shared setup is repeated across scenarios, move it into `Background`.
+- If the setup is imperative shell work, prefer `Given I run "..."` over abusing `When`.
+- If a scenario times out, remember the default timeout is `1` second and increase `--timeout` or `.smokorc` only for the slow path.
 
-## Workflow
+## Performance
 
-### Running Tests
+- Prefer `smoko run specs/ --parallel 0` for normal runs so Smoko auto-sizes concurrency.
+- Keep the default `1` second timeout unless the command or image is genuinely slow.
+- Use `Background` for repeated setup instead of duplicating expensive `Given` steps in every scenario.
+- Prefer file-based setup steps over long shell setup sequences when both express the same intent.
 
-#### Run a single file
+## Commands
+
 ```bash
 smoko run test.smoko
-```
-
-#### Run all tests in a directory
-```bash
 smoko run specs/
-smoko run .
-```
-
-#### Run with specific Docker image
-```bash
-smoko run test.smoko --image myimage:latest
-```
-
-#### Run with verbose output
-```bash
-smoko run test.smoko --verbose
-```
-
-Shows detailed output for each step, useful for debugging failing tests.
-
-#### Run with fail-fast
-```bash
-smoko run test.smoko --fail-fast
-```
-
-Stops after the first failing scenario instead of running all tests.
-
-#### Run scenarios in parallel
-```bash
-smoko run specs/ --parallel 4
+smoko run             # defaults to specs/ directory
 smoko run specs/ --parallel 0
+smoko run test.smoko --image alpine:latest
+smoko run test.smoko --verbose
+smoko run test.smoko --fail-fast
+smoko run specs/ --list    # list scenarios without running
+smoko run specs/ --no-build   # skip build step even if .smokorc has build = "..."
 ```
 
-Runs up to N scenarios concurrently. `--parallel 0` auto-detects based on available CPU cores (`GOMAXPROCS`). Default is `1` (sequential). Since each scenario runs in its own Docker container, parallelism is safe. Useful for large test suites where Docker overhead dominates.
+`timeout` in `.smokorc` or `--timeout` applies to setup and action commands. The built-in default is `1` second.
 
-> **Tip:** Combine with `--fail-fast` to stop as soon as any parallel scenario fails.
+## .smokorc
 
-### Image Resolution
-
-Smoko resolves the Docker image to use in this order (highest to lowest priority):
-1. `--image` flag on the command line
-2. `Image:` declaration inside the `.smoko` file
-3. `image` setting in `.smokorc` (TOML format in the project root)
-4. Error if no image is specified
-
-Example `.smokorc`:
 ```toml
-image = "alpine:latest"
-timeout = 30
+image   = "myimage:latest"
+timeout = 5
+build   = "docker build -f Dockerfile.test -t myimage:latest ."
 ```
 
-### Test Organization
-
-Best practices for organizing tests:
-- **By feature**: One `.smoko` file per feature being tested
-- **By command**: One file per CLI command or subcommand
-- **Fixtures**: Place test data files in a `specs/` directory, referenced relative to the container's `/smoko-work` directory
-
-Example structure:
-```
-project/
-├── specs/
-│   ├── basic.smoko
-│   ├── files.smoko
-│   ├── envvars.smoko
-│   └── advanced/
-│       └── complex.smoko
-└── .smokorc
-```
-
-## Best Practices
-
-### Test Isolation
-Each scenario runs in a fresh Docker container. Avoid assumptions about file system state or previous scenarios. Use explicit Given steps to set up all required files and environment.
-
-### Meaningful Assertions
-Write assertions that actually verify the behavior, not just that the command succeeded:
-
-```
-# Good
-Then output contains "User created successfully"
-Then file "users.db" exists
-
-# Vague
-Then exit code is 0
-```
-
-### Regex Patterns
-When using regex assertions, remember:
-- Go `regexp` syntax (RE2 dialect, no backreferences)
-- The pattern must match the entire output (anchors: `^` start, `$` end)
-- Use `(?s:.*)` for matching across newlines
-
-Example:
-```
-Then output matches "^Usage: my-cli.*OPTIONS.*$"
-```
-
-### Environment Variables
-Use environment variables for configuration that varies across test runs:
-
-```
-Given environment variable "API_KEY" is set to "test-key"
-Given environment variable "DEBUG" is set to "1"
-```
-
-### File Content in Assertions
-For complex file content assertions, use `contains` (substring match) rather than exact matches. This makes tests more maintainable.
-
-Escape double quotes inside assertion strings with `\"`:
-```
-Then file "output.json" contains "\"status\": \"success\""
-```
-
-For multi-line content (e.g. JSON blocks), use the block form:
-```
-Then file ".curriculum" contains:
-  "dependencies": [
-    { "name": "dummy-skill" }
-  ]
-```
-
-To assert absence of content:
-```
-Then file ".curriculum" does not contain "\"version\""
-Then output does not contain "error"
-```
-
-### Organizing Fixtures
-Store test data files in `specs/` and reference them from Given steps:
-
-```
-Given a file "input.csv" with content:
-  [content here]
-```
-
-Or copy from fixtures in the container using shell commands:
-
-```
-When I run "cp /fixtures/template.conf config.conf"
-```
-
-(Note: Fixtures would need to be baked into your test Docker image)
-
-## Architecture Notes for Agent
-
-When an agent is asked to:
-- **Write a smoko test** — Use this guide to construct correct Given/When/Then syntax
-- **Debug a failing test** — Check exit codes, output matching (exact vs regex), file paths, and environment variables
-- **Add assertions** — Refer to the "Then/And Steps" section for available assertion types
-- **Optimize tests** — Consolidate shared setup into Background, use environment variables for configuration
-- **Test new CLI behavior** — Start with simple output assertions, then add file/exit code checks
-
-The underlying engine handles Docker lifecycle, file operations, and regex matching—just focus on describing the test scenario in DSL.
+When `build` is set, smoko runs the command before pulling or running any scenarios. Build output streams to the terminal. Use `--no-build` to skip when the image is already current.

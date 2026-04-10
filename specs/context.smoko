@@ -1,26 +1,29 @@
 Feature: bira context
 
+  Background:
+    Given I run "bira init --name test-project"
+
   Scenario: Context shows project summary after init
-    When I run "sh -c 'bira init --name ctx-proj > /dev/null && bira context'"
+    When I run "bira context"
     Then exit code is 0
-    And output contains "ctx-proj"
+    And output contains "test-project"
     And output contains "Open tasks:"
 
   Scenario: Context --json returns structured output
-    When I run "sh -c 'bira init --name ctx-json > /dev/null && bira context --json'"
+    When I run "bira context --json"
     Then exit code is 0
-    And output contains "\"project_name\": \"ctx-json\""
-    And output contains "\"open_task_count\":"
+    And output as JSON at path "$.project_name" equals "test-project"
+    And output as JSON at path "$.open_task_count" exists
 
   Scenario: Context --full shows feature breakdown
-    When I run "sh -c 'bira init --name ctx-full > /dev/null && bira context --full'"
+    When I run "bira context --full"
     Then exit code is 0
-    And output contains "ctx-full"
+    And output contains "test-project"
     And output contains "backlog"
     And output contains "Ready:"
 
   Scenario: Context --full --json shows features array
-    When I run "sh -c 'bira init --name ctx-full-json > /dev/null && bira context --full --json'"
+    When I run "bira context --full --json"
     Then exit code is 0
-    And output contains "\"features\":"
-    And output contains "\"is_backlog\": true"
+    And output as JSON at path "$.features" exists
+    And output as JSON at path "$.features[0].is_backlog" equals true
