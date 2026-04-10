@@ -1,19 +1,12 @@
 {
   "version": "0.3.0",
-  "skills": [
-    {
-      "name": "bira"
-    }
-  ],
+  "skills": [],
   "dependencies": [
     {
       "name": "smoko"
     },
     {
       "name": "curriculum"
-    },
-    {
-      "name": "bira"
     }
   ]
 }
