@@ -16,6 +16,14 @@ Use this guide to write correct Smoko scenarios and stay within the DSL the tool
 - Use a single `When` step as the action under test.
 - Use `Then` and inherited `And` or `But` steps for assertions. `And`/`But` inherit their type from the preceding keyword (`Given`, `When`, or `Then`).
 
+## Output modes
+
+- Use plain `smoko run ...` when a human wants to inspect the terminal report.
+- Use `smoko run ... --output json` when another tool or agent will parse the result.
+- Default text mode includes runtime in live scenario status lines, per-feature totals, and the suite summary.
+- JSON mode emits one structured document to stdout with suite, feature, and scenario durations plus assertion metadata.
+- Prefer JSON mode for agent retries, diagnostics extraction, or any workflow that needs stable machine-readable fields.
+
 ## Supported structure
 
 ```gherkin
@@ -71,9 +79,13 @@ Given the working directory is "path/to/subdir"
 
 Behavior:
 - Changes the working directory for all subsequent `Given I run` and `When I run` steps in the scenario.
-- The path is relative to the scenario root (`/smoko-work`); resolved as `/smoko-work/<path>`.
+- The path can be relative to the scenario root (`/smoko-work`) or absolute. Relative paths are resolved as `/smoko-work/<path>`; absolute paths are used as-is.
 - The directory must already exist; if not, the scenario fails immediately with a clear error.
 - Resets to `/smoko-work` automatically at the start of each new scenario.
+- To reset the working directory back to the scenario root mid-scenario, use an absolute path:
+  ```gherkin
+  Given the working directory is "/smoko-work"
+  ```
 - `Then` file and directory assertions always use paths relative to `/smoko-work`, regardless of this step.
 
 Use this step when the CLI under test needs to run from a subdirectory (e.g., a tool that walks up to find a project root):
@@ -125,7 +137,7 @@ Given I run "my-cli version"
 And I save pattern "v([0-9.]+)" as $VERSION
 ```
 
-The variable is written to `.smoko_env` immediately, making it available to subsequent `Given I run`, `When I run`, and file content steps via shell expansion.
+The variable is written to `.smoko_env` immediately, making it available to subsequent `Given I run`, `When I run`, file content steps, and **Then/And file and directory path assertions** via `$VAR` expansion (e.g. `Then file "$OUTDIR/result.json" exists`).
 
 Save steps must immediately follow a `Given I run` step. Multiple saves after the same run are allowed:
 
@@ -143,6 +155,12 @@ Use exactly one `When` step per scenario.
 
 ```gherkin
 When I run "command arg1 arg2"
+```
+
+Use `\"` inside a command string to include a literal double-quote character:
+
+```gherkin
+When I run "sh -c 'grep \"pattern\" file.txt'"
 ```
 
 ### Run a command with stdin
@@ -272,6 +290,34 @@ When I run "mycli bump --major"
 
 `Then` file paths remain relative to `/smoko-work` (the scenario root), not the working directory.
 
+To reset the working directory back to the scenario root after changing it, use an absolute path:
+
+```gherkin
+Given the working directory is "repo"
+When I run "mycli setup"          # runs from /smoko-work/repo
+...
+# later scenario or step that needs /smoko-work again:
+Given the working directory is "/smoko-work"
+When I run "mycli verify"         # back to /smoko-work
+```
+
+### Using captured variables in Then file assertions
+
+Variables captured with `And I save` expand in Then file and directory path arguments, keeping action/assertion steps clean:
+
+```gherkin
+Scenario: CLI writes output to a path it reports
+  Given I run "mycli init --json"
+    And I save JSON path "$.outputDir" as $OUTDIR
+  When I run "mycli generate"
+  Then exit code is 0
+  Then directory "$OUTDIR" exists
+  Then file "$OUTDIR/index.html" exists
+  Then file "$OUTDIR/index.html" contains "<!DOCTYPE html>"
+```
+
+Don't embed file-existence checks in the `When` shell command just to avoid variable expansion — use `$VAR` directly in `Then` step paths.
+
 ### Sequential setup with variable capture
 
 Use `Given I run` + `And I save` to chain setup steps that depend on each other's output:
@@ -365,6 +411,7 @@ Scenario: CLI respects environment variables
 - If a `Given the working directory is` step fails, the directory does not yet exist in the container — add a `Given the directory "..." exists` step before it.
 - If a `Given` step fails before `When`, inspect the setup command or path assumptions first.
 - If a file assertion fails, remember paths are relative to `/smoko-work` unless explicitly absolute.
+- If a `Then file "$VAR/..."` path is treated as a literal string (dollar sign visible in error), the variable was not captured — check that `And I save ... as $VAR` immediately follows the `Given I run` that produced the value.
 - If regex assertions fail, verify the step uses `matches pattern`, not just `matches`.
 - If a JSON assertion fails, check whether the source is valid JSON, whether the JSONPath is valid, and whether `equals` matched exactly one node.
 - If shared setup is repeated across scenarios, move it into `Background`.
@@ -387,6 +434,7 @@ smoko run             # defaults to specs/ directory
 smoko run specs/ --parallel 0
 smoko run test.smoko --image alpine:latest
 smoko run test.smoko --verbose
+smoko run specs/ --output json   # preferred for agents and tooling
 smoko run test.smoko --fail-fast
 smoko run specs/ --list    # list scenarios without running
 smoko run specs/ --no-build   # skip build step even if .smokorc has build = "..."
