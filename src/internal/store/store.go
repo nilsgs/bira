@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // DataDir returns the resolved path to the bira data directory.
@@ -94,4 +95,92 @@ func DeleteDir(path string) error {
 func Exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// SavePlan writes markdown content to a .plan.md sidecar file.
+// If content is empty, the sidecar is deleted (if it exists).
+func SavePlan(jsonPath string, content string) error {
+	planPath := strings.TrimSuffix(jsonPath, ".json") + ".plan.md"
+	if content == "" {
+		if err := os.Remove(planPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove plan: %w", err)
+		}
+		return nil
+	}
+	if err := EnsureDir(filepath.Dir(planPath)); err != nil {
+		return err
+	}
+	return os.WriteFile(planPath, []byte(content), 0o644)
+}
+
+// LoadPlan reads the .plan.md sidecar for a .json file.
+// Returns "" if the sidecar does not exist.
+func LoadPlan(jsonPath string) (string, error) {
+	planPath := strings.TrimSuffix(jsonPath, ".json") + ".plan.md"
+	data, err := os.ReadFile(planPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", fmt.Errorf("read plan: %w", err)
+	}
+	return string(data), nil
+}
+
+// ResolveProjectBySlug finds a project ID by normalised name slug.
+func ResolveProjectBySlug(slug string) (string, error) {
+	dataDir, err := DataDir()
+	if err != nil {
+		return "", err
+	}
+	projectsDir := filepath.Join(dataDir, "projects")
+	entries, err := os.ReadDir(projectsDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		metaPath := filepath.Join(projectsDir, e.Name(), "meta.json")
+		var meta struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}
+		if err := LoadJSON(metaPath, &meta); err != nil {
+			continue
+		}
+		if normaliseSlug(meta.Name) == slug {
+			return meta.ID, nil
+		}
+	}
+	return "", nil
+}
+
+func normaliseSlug(name string) string {
+	s := strings.ToLower(name)
+	s = strings.ReplaceAll(s, " ", "-")
+	s = strings.ReplaceAll(s, "_", "-")
+	return s
+}
+
+// LoadProjectMeta loads the project's meta.json.
+func LoadProjectMeta(projectID string) (*ProjectMeta, error) {
+	dir, err := ProjectDir(projectID)
+	if err != nil {
+		return nil, err
+	}
+	var m ProjectMeta
+	if err := LoadJSON(filepath.Join(dir, "meta.json"), &m); err != nil {
+		return nil, fmt.Errorf("load project meta: %w", err)
+	}
+	return &m, nil
+}
+
+type ProjectMeta struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }

@@ -12,14 +12,13 @@ Feature: bira feature
   Scenario: Feature add --json returns structured output
     When I run "bira feature add json-feat --json"
     Then exit code is 0
-    And output as JSON at path "$.name" equals "json-feat"
-    And output as JSON at path "$.status" equals "todo"
+    And output as JSON at path "$.title" equals "json-feat"
+    And output as JSON at path "$.status" equals "proposed"
 
-  Scenario: Feature add with --desc and --assign
-    When I run "bira feature add flagged --desc 'a description' --assign agent1 --json"
+  Scenario: Feature add with --desc sets description
+    When I run "bira feature add flagged --desc 'a description' --json"
     Then exit code is 0
     And output as JSON at path "$.description" equals "a description"
-    And output as JSON at path "$.assigned_to" equals "agent1"
 
   Scenario: Feature add with --tags
     When I run "bira feature add tagged --tags 'a,b,c' --json"
@@ -40,7 +39,7 @@ Feature: bira feature
 
   Scenario: Feature list --status filters by status
     Given I run "bira feature add open-feat"
-    When I run "bira feature list --status todo"
+    When I run "bira feature list --status proposed"
     Then exit code is 0
     And output contains "open-feat"
 
@@ -62,24 +61,63 @@ Feature: bira feature
     And I save JSON path "$.id" as $FID
     When I run "bira feature show $FID --json"
     Then exit code is 0
-    And output as JSON at path "$.name" equals "show-json"
+    And output as JSON at path "$.title" equals "show-json"
 
   Scenario: Feature show unknown ID returns exit 2
     When I run "bira feature show deadbeef"
     Then exit code is 2
 
-  Scenario: Feature update changes status
-    Given I run "bira feature add to-update --json"
+  Scenario: Feature triage sets impact and complexity
+    Given I run "bira feature add to-triage --json"
     And I save JSON path "$.id" as $FID
-    When I run "bira feature update $FID --status in-progress --json"
+    When I run "bira feature triage $FID --impact high --complexity medium --json"
+    Then exit code is 0
+    And output as JSON at path "$.status" equals "triaged"
+    And output as JSON at path "$.impact" equals "high"
+    And output as JSON at path "$.complexity" equals "medium"
+
+  Scenario: Feature triage human output confirms triage
+    Given I run "bira feature add triage-human --json"
+    And I save JSON path "$.id" as $FID
+    When I run "bira feature triage $FID --impact low --complexity low"
+    Then exit code is 0
+    And output contains "Triaged feature"
+
+  Scenario: Feature start marks in-progress
+    Given I run "bira feature add to-start --json"
+    And I save JSON path "$.id" as $FID
+    When I run "bira feature start $FID --json"
     Then exit code is 0
     And output as JSON at path "$.status" equals "in-progress"
 
-  Scenario: Feature update with invalid status fails
-    Given I run "bira feature add upd-bad --json"
+  Scenario: Feature done marks completed
+    Given I run "bira feature add to-done --json"
     And I save JSON path "$.id" as $FID
-    When I run "bira feature update $FID --status nonsense"
-    Then exit code is not 0
+    Given I run "bira feature start $FID"
+    When I run "bira feature done $FID --json"
+    Then exit code is 0
+    And output as JSON at path "$.status" equals "done"
+
+  Scenario: Feature reject marks rejected
+    Given I run "bira feature add to-reject --json"
+    And I save JSON path "$.id" as $FID
+    When I run "bira feature reject $FID --json"
+    Then exit code is 0
+    And output as JSON at path "$.status" equals "rejected"
+
+  Scenario: Feature reject human output confirms rejection
+    Given I run "bira feature add reject-human --json"
+    And I save JSON path "$.id" as $FID
+    When I run "bira feature reject $FID"
+    Then exit code is 0
+    And output contains "Rejected feature"
+
+  Scenario: Feature note adds a note to a feature
+    Given I run "bira feature add to-note --json"
+    And I save JSON path "$.id" as $FID
+    When I run "bira feature note $FID 'my note here'"
+    Then exit code is 0
+    And output contains "Note added to feature"
 
   Scenario: Feature delete removes feature
     Given I run "bira feature add to-delete --json"
@@ -87,29 +125,4 @@ Feature: bira feature
     When I run "bira feature delete $FID"
     Then exit code is 0
     And output contains "Deleted feature"
-
-  Scenario: Feature delete with tasks requires --move-tasks-to
-    Given I run "bira feature add has-tasks --json"
-    And I save JSON path "$.id" as $FID
-    Given I run "bira task add a-task --feature $FID"
-    When I run "bira feature delete $FID"
-    Then exit code is not 0
-    And stderr contains "--move-tasks-to"
-
-  Scenario: Feature delete with --move-tasks-to reassigns tasks
-    Given I run "bira feature add source-feat --json"
-    And I save JSON path "$.id" as $FID
-    Given I run "bira feature add target-feat --json"
-    And I save JSON path "$.id" as $TID
-    Given I run "bira task add move-me --feature $FID"
-    When I run "bira feature delete $FID --move-tasks-to $TID"
-    Then exit code is 0
-    And output contains "Deleted feature"
-
-  Scenario: Feature note adds a note to a feature
-    Given I run "bira feature add to-note --json"
-    And I save JSON path "$.id" as $FID
-    When I run "bira feature note $FID 'my note here'"
-    Then exit code is 0
-    And output contains "Note added"
 

@@ -1,0 +1,149 @@
+Feature: bira bug
+
+  Background:
+    Given I run "bira init --name test-project"
+
+  Scenario: Bug create reports a new bug
+    When I run "bira bug create my-bug"
+    Then exit code is 0
+    And output contains "Created bug"
+    And output contains "my-bug"
+
+  Scenario: Bug create --json returns structured output
+    When I run "bira bug create json-bug --json"
+    Then exit code is 0
+    And output as JSON at path "$.title" equals "json-bug"
+    And output as JSON at path "$.status" equals "open"
+
+  Scenario: Bug create with --desc sets description
+    When I run "bira bug create described --desc 'crash on startup' --json"
+    Then exit code is 0
+    And output as JSON at path "$.description" equals "crash on startup"
+
+  Scenario: Bug create with --reported-by sets reporter
+    When I run "bira bug create reported --reported-by 'agent@other-tool' --json"
+    Then exit code is 0
+    And output as JSON at path "$.reported_by" equals "agent@other-tool"
+
+  Scenario: Bug create with --tags
+    When I run "bira bug create tagged --tags 'parser,crash' --json"
+    Then exit code is 0
+    And output as JSON at path "$.tags" exists
+
+  Scenario: Bug list shows bugs
+    Given I run "bira bug create list-me"
+    When I run "bira bug list"
+    Then exit code is 0
+    And output contains "list-me"
+
+  Scenario: Bug list --json returns array
+    Given I run "bira bug create listed"
+    When I run "bira bug list --json"
+    Then exit code is 0
+    And output contains "listed"
+
+  Scenario: Bug list --status filters by status
+    Given I run "bira bug create open-bug"
+    When I run "bira bug list --status open"
+    Then exit code is 0
+    And output contains "open-bug"
+
+  Scenario: Bug list --status with invalid value fails
+    When I run "bira bug list --status nosuchstatus"
+    Then exit code is not 0
+    And stderr contains "invalid status"
+
+  Scenario: Bug show displays bug details
+    Given I run "bira bug create show-me --json"
+    And I save JSON path "$.id" as $BID
+    When I run "bira bug show $BID"
+    Then exit code is 0
+    And output contains "show-me"
+    And output contains "ID:"
+    And output contains "Status:"
+
+  Scenario: Bug show --json returns structured output
+    Given I run "bira bug create show-json --json"
+    And I save JSON path "$.id" as $BID
+    When I run "bira bug show $BID --json"
+    Then exit code is 0
+    And output as JSON at path "$.title" equals "show-json"
+    And output as JSON at path "$.status" equals "open"
+
+  Scenario: Bug show unknown ID returns exit 2
+    When I run "bira bug show deadbeef"
+    Then exit code is 2
+
+  Scenario: Bug triage sets criticality and moves to triaged
+    Given I run "bira bug create to-triage --json"
+    And I save JSON path "$.id" as $BID
+    When I run "bira bug triage $BID --criticality high --json"
+    Then exit code is 0
+    And output as JSON at path "$.status" equals "triaged"
+    And output as JSON at path "$.criticality" equals "high"
+
+  Scenario: Bug triage human output confirms triage
+    Given I run "bira bug create triage-human --json"
+    And I save JSON path "$.id" as $BID
+    When I run "bira bug triage $BID --criticality medium"
+    Then exit code is 0
+    And output contains "Triaged bug"
+
+  Scenario: Bug start marks in-progress
+    Given I run "bira bug create to-start --json"
+    And I save JSON path "$.id" as $BID
+    When I run "bira bug start $BID --json"
+    Then exit code is 0
+    And output as JSON at path "$.status" equals "in-progress"
+
+  Scenario: Bug done marks fixed
+    Given I run "bira bug create to-fix --json"
+    And I save JSON path "$.id" as $BID
+    Given I run "bira bug start $BID"
+    When I run "bira bug done $BID --json"
+    Then exit code is 0
+    And output as JSON at path "$.status" equals "fixed"
+
+  Scenario: Bug wont-fix marks wont-fix
+    Given I run "bira bug create to-drop --json"
+    And I save JSON path "$.id" as $BID
+    When I run "bira bug wont-fix $BID --json"
+    Then exit code is 0
+    And output as JSON at path "$.status" equals "wont-fix"
+
+  Scenario: Bug wont-fix human output confirms decision
+    Given I run "bira bug create drop-human --json"
+    And I save JSON path "$.id" as $BID
+    When I run "bira bug wont-fix $BID"
+    Then exit code is 0
+    And output contains "wont-fix"
+
+  Scenario: Bug note appends a note
+    Given I run "bira bug create to-note --json"
+    And I save JSON path "$.id" as $BID
+    When I run "bira bug note $BID 'investigated: root cause is nil deref'"
+    Then exit code is 0
+    And output contains "Note added to bug"
+
+  Scenario: Bug delete removes the bug
+    Given I run "bira bug create to-delete --json"
+    And I save JSON path "$.id" as $BID
+    When I run "bira bug delete $BID"
+    Then exit code is 0
+    And output contains "Deleted bug"
+
+  Scenario: Bug delete unknown ID returns exit 2
+    When I run "bira bug delete deadbeef"
+    Then exit code is 2
+
+  Scenario: Bug filed against another project via --project flag
+    Given the directory "other" exists
+    Given the working directory is "other"
+    Given I run "bira init --name other-tool --json"
+    And I save JSON path "$.id" as $OTHER_PID
+    Given the working directory is "/smoko-work"
+    When I run "bira bug create 'Parser crashes on empty input' --project $OTHER_PID --json"
+    Then exit code is 0
+    And output as JSON at path "$.title" equals "Parser crashes on empty input"
+    And output as JSON at path "$.project_id" exists
+

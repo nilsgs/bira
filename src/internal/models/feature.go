@@ -3,15 +3,17 @@ package models
 import "time"
 
 type Feature struct {
-	ID          string    `json:"id"`
-	ProjectID   string    `json:"project_id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description,omitempty"`
-	Status      string    `json:"status"`
-	AssignedTo  string    `json:"assigned_to,omitempty"`
-	Tags        []string  `json:"tags,omitempty"`
-	IsBacklog   bool      `json:"is_backlog"`
-	Notes       []Note    `json:"notes,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID           string    `json:"id"`
+	ProjectID    string    `json:"project_id"`
+	Title        string    `json:"title"`
+	Description  string    `json:"description,omitempty"`
+	Impact       string    `json:"impact,omitempty"`
+	Complexity   string    `json:"complexity,omitempty"`
+	Tags         []string  `json:"tags,omitempty"`
+	Notes        []Note    `json:"notes,omitempty"`
+	Status       string    `json:"status"`
+	PromotedFrom string    `json:"promoted_from,omitempty"`
+	Plan         string    `json:"plan,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }

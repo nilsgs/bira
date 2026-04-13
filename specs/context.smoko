@@ -7,23 +7,53 @@ Feature: bira context
     When I run "bira context"
     Then exit code is 0
     And output contains "test-project"
-    And output contains "Open tasks:"
+    And output contains "Ideas:"
+    And output contains "Bugs:"
+    And output contains "Features:"
 
   Scenario: Context --json returns structured output
     When I run "bira context --json"
     Then exit code is 0
     And output as JSON at path "$.project_name" equals "test-project"
-    And output as JSON at path "$.open_task_count" exists
+    And output as JSON at path "$.ideas" exists
+    And output as JSON at path "$.bugs" exists
+    And output as JSON at path "$.features" exists
 
-  Scenario: Context --full shows feature breakdown
+  Scenario: Context --json counts reflect zero entities after init
+    When I run "bira context --json"
+    Then exit code is 0
+    And output as JSON at path "$.ideas" equals 0
+    And output as JSON at path "$.bugs" equals 0
+    And output as JSON at path "$.features" equals 0
+
+  Scenario: Context reflects added entities
+    Given I run "bira idea add test-idea"
+    Given I run "bira bug create test-bug"
+    Given I run "bira feature add test-feat"
+    When I run "bira context --json"
+    Then exit code is 0
+    And output as JSON at path "$.ideas" equals 1
+    And output as JSON at path "$.bugs" equals 1
+    And output as JSON at path "$.features" equals 1
+
+  Scenario: Context --full shows section headers
+    Given I run "bira idea add some-idea"
     When I run "bira context --full"
     Then exit code is 0
     And output contains "test-project"
-    And output contains "backlog"
-    And output contains "Ready:"
+    And output contains "IDEAS ("
+    And output contains "BUGS ("
+    And output contains "FEATURES ("
 
-  Scenario: Context --full --json shows features array
+  Scenario: Context --full --json shows counts and arrays
+    Given I run "bira idea add full-idea"
+    Given I run "bira bug create full-bug"
     When I run "bira context --full --json"
     Then exit code is 0
+    And output as JSON at path "$.idea_count" exists
+    And output as JSON at path "$.bug_count" exists
+    And output as JSON at path "$.feature_count" exists
+    And output as JSON at path "$.ideas" exists
+    And output as JSON at path "$.bugs" exists
     And output as JSON at path "$.features" exists
-    And output as JSON at path "$.features[0].is_backlog" equals true
+

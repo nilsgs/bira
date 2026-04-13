@@ -1,0 +1,119 @@
+Feature: bira idea
+
+  Background:
+    Given I run "bira init --name test-project"
+
+  Scenario: Idea add creates an idea
+    When I run "bira idea add my-idea"
+    Then exit code is 0
+    And output contains "Created idea"
+    And output contains "my-idea"
+
+  Scenario: Idea add --json returns structured output
+    When I run "bira idea add json-idea --json"
+    Then exit code is 0
+    And output as JSON at path "$.title" equals "json-idea"
+    And output as JSON at path "$.status" equals "inbox"
+
+  Scenario: Idea add with --desc sets description
+    When I run "bira idea add described --desc 'an interesting concept' --json"
+    Then exit code is 0
+    And output as JSON at path "$.description" equals "an interesting concept"
+
+  Scenario: Idea add with --tags
+    When I run "bira idea add tagged --tags 'ux,perf' --json"
+    Then exit code is 0
+    And output as JSON at path "$.tags" exists
+
+  Scenario: Idea list shows ideas
+    Given I run "bira idea add list-me"
+    When I run "bira idea list"
+    Then exit code is 0
+    And output contains "list-me"
+
+  Scenario: Idea list --json returns array
+    Given I run "bira idea add listed"
+    When I run "bira idea list --json"
+    Then exit code is 0
+    And output contains "listed"
+
+  Scenario: Idea list --status filters by status
+    Given I run "bira idea add inbox-idea"
+    When I run "bira idea list --status inbox"
+    Then exit code is 0
+    And output contains "inbox-idea"
+
+  Scenario: Idea list --status with invalid value fails
+    When I run "bira idea list --status nosuchstatus"
+    Then exit code is not 0
+    And stderr contains "invalid status"
+
+  Scenario: Idea show displays idea details
+    Given I run "bira idea add show-me --json"
+    And I save JSON path "$.id" as $IID
+    When I run "bira idea show $IID"
+    Then exit code is 0
+    And output contains "show-me"
+    And output contains "ID:"
+    And output contains "Status:"
+
+  Scenario: Idea show --json returns structured output
+    Given I run "bira idea add show-json --json"
+    And I save JSON path "$.id" as $IID
+    When I run "bira idea show $IID --json"
+    Then exit code is 0
+    And output as JSON at path "$.title" equals "show-json"
+    And output as JSON at path "$.status" equals "inbox"
+
+  Scenario: Idea show unknown ID returns exit 2
+    When I run "bira idea show deadbeef"
+    Then exit code is 2
+
+  Scenario: Idea triage sets priority and moves to triaged
+    Given I run "bira idea add to-triage --json"
+    And I save JSON path "$.id" as $IID
+    When I run "bira idea triage $IID --priority high --json"
+    Then exit code is 0
+    And output as JSON at path "$.status" equals "triaged"
+    And output as JSON at path "$.priority" equals "high"
+
+  Scenario: Idea triage human output confirms triage
+    Given I run "bira idea add triage-human --json"
+    And I save JSON path "$.id" as $IID
+    When I run "bira idea triage $IID --priority medium"
+    Then exit code is 0
+    And output contains "Triaged idea"
+
+  Scenario: Idea promote creates a feature
+    Given I run "bira idea add to-promote --json"
+    And I save JSON path "$.id" as $IID
+    When I run "bira idea promote $IID --json"
+    Then exit code is 0
+    And output as JSON at path "$.title" equals "to-promote"
+    And output as JSON at path "$.status" equals "proposed"
+    And output as JSON at path "$.promoted_from" exists
+
+  Scenario: Idea promote human output confirms promotion
+    Given I run "bira idea add promote-human --json"
+    And I save JSON path "$.id" as $IID
+    When I run "bira idea promote $IID"
+    Then exit code is 0
+    And output contains "Promoted idea"
+
+  Scenario: Idea note appends a note
+    Given I run "bira idea add to-note --json"
+    And I save JSON path "$.id" as $IID
+    When I run "bira idea note $IID 'remember this'"
+    Then exit code is 0
+    And output contains "Note added to idea"
+
+  Scenario: Idea delete removes the idea
+    Given I run "bira idea add to-delete --json"
+    And I save JSON path "$.id" as $IID
+    When I run "bira idea delete $IID"
+    Then exit code is 0
+    And output contains "Deleted idea"
+
+  Scenario: Idea delete unknown ID returns exit 2
+    When I run "bira idea delete deadbeef"
+    Then exit code is 2

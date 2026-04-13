@@ -21,28 +21,23 @@ func newFeatureCmd() *cobra.Command {
 		Short: "Manage features",
 	}
 
-	// --- add ---
-
 	addCmd := &cobra.Command{
-		Use:   "add <name>",
-		Short: "Create a new feature",
+		Use:   "add <title>",
+		Short: "Add a new feature (status: proposed)",
 		Args:  cobra.ExactArgs(1),
 		RunE:  runFeatureAdd,
 	}
-	addCmd.Flags().String("desc", "", "feature description")
-	addCmd.Flags().String("assign", "", "assigned agent/user")
+	addCmd.Flags().String("desc", "", "description")
+	addCmd.Flags().String("impact", "", "impact level (low|medium|high)")
+	addCmd.Flags().String("complexity", "", "complexity level (low|medium|high)")
 	addCmd.Flags().String("tags", "", "comma-separated tags")
-
-	// --- list ---
 
 	listCmd := &cobra.Command{
 		Use:   "list",
-		Short: "List features in the current project",
+		Short: "List features",
 		RunE:  runFeatureList,
 	}
 	listCmd.Flags().String("status", "", "filter by status")
-
-	// --- show ---
 
 	showCmd := &cobra.Command{
 		Use:   "show <id>",
@@ -51,30 +46,39 @@ func newFeatureCmd() *cobra.Command {
 		RunE:  runFeatureShow,
 	}
 
-	// --- update ---
-
-	updateCmd := &cobra.Command{
-		Use:   "update <id>",
-		Short: "Update a feature",
+	triageCmd := &cobra.Command{
+		Use:   "triage <id>",
+		Short: "Move feature to triaged status",
 		Args:  cobra.ExactArgs(1),
-		RunE:  runFeatureUpdate,
+		RunE:  runFeatureTriage,
 	}
-	updateCmd.Flags().String("status", "", "new status")
-	updateCmd.Flags().String("desc", "", "new description")
-	updateCmd.Flags().String("assign", "", "new assignee")
-	updateCmd.Flags().String("tags", "", "new comma-separated tags")
+	triageCmd.Flags().String("impact", "", "impact level (low|medium|high)")
+	triageCmd.Flags().String("complexity", "", "complexity level (low|medium|high)")
+	triageCmd.Flags().String("note", "", "optional note")
 
-	// --- delete ---
-
-	deleteCmd := &cobra.Command{
-		Use:   "delete <id>",
-		Short: "Delete a feature",
+	startCmd := &cobra.Command{
+		Use:   "start <id>",
+		Short: "Mark feature as in-progress",
 		Args:  cobra.ExactArgs(1),
-		RunE:  runFeatureDelete,
+		RunE:  runFeatureStart,
 	}
-	deleteCmd.Flags().String("move-tasks-to", "", "move tasks to this feature ID before deleting")
+	startCmd.Flags().String("note", "", "optional note")
 
-	// --- note ---
+	doneCmd := &cobra.Command{
+		Use:   "done <id>",
+		Short: "Mark feature as done",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runFeatureDone,
+	}
+	doneCmd.Flags().String("note", "", "optional note")
+
+	rejectCmd := &cobra.Command{
+		Use:   "reject <id>",
+		Short: "Reject a feature",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runFeatureReject,
+	}
+	rejectCmd.Flags().String("note", "", "reason for rejection")
 
 	noteCmd := &cobra.Command{
 		Use:   "note <id> <message>",
@@ -83,25 +87,50 @@ func newFeatureCmd() *cobra.Command {
 		RunE:  runFeatureNote,
 	}
 
-	featureCmd.AddCommand(addCmd, listCmd, showCmd, updateCmd, deleteCmd, noteCmd)
+	updateCmd := &cobra.Command{
+		Use:   "update <id>",
+		Short: "Update feature fields",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runFeatureUpdate,
+	}
+	updateCmd.Flags().String("title", "", "new title")
+	updateCmd.Flags().String("desc", "", "new description")
+	updateCmd.Flags().String("impact", "", "new impact")
+	updateCmd.Flags().String("complexity", "", "new complexity")
+	updateCmd.Flags().String("tags", "", "new comma-separated tags")
+
+	deleteCmd := &cobra.Command{
+		Use:   "delete <id>",
+		Short: "Delete a feature",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runFeatureDelete,
+	}
+
+	featureCmd.AddCommand(addCmd, listCmd, showCmd, triageCmd, startCmd, doneCmd, rejectCmd, noteCmd, updateCmd, deleteCmd)
 	return featureCmd
 }
-
-// --- implementations ---
 
 func runFeatureAdd(cmd *cobra.Command, args []string) error {
 	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}
-	featureAddDesc, _ := cmd.Flags().GetString("desc")
-	featureAddAssign, _ := cmd.Flags().GetString("assign")
-	featureAddTags, _ := cmd.Flags().GetString("tags")
+	desc, _ := cmd.Flags().GetString("desc")
+	impact, _ := cmd.Flags().GetString("impact")
+	complexity, _ := cmd.Flags().GetString("complexity")
+	tags, _ := cmd.Flags().GetString("tags")
+
+	if impact != "" && !models.IsValidLevel(impact) {
+		return fmt.Errorf("invalid impact %q (valid: low, medium, high)", impact)
+	}
+	if complexity != "" && !models.IsValidLevel(complexity) {
+		return fmt.Errorf("invalid complexity %q (valid: low, medium, high)", complexity)
+	}
+
 	projectDir, err := store.ProjectDir(projectID)
 	if err != nil {
 		return err
 	}
-
 	lock, err := store.AcquireLock(projectDir)
 	if err != nil {
 		return err
@@ -112,11 +141,12 @@ func runFeatureAdd(cmd *cobra.Command, args []string) error {
 	feature := models.Feature{
 		ID:          store.NewID(),
 		ProjectID:   projectID,
-		Name:        args[0],
-		Description: featureAddDesc,
-		Status:      models.StatusTodo,
-		AssignedTo:  featureAddAssign,
-		Tags:        parseTags(featureAddTags),
+		Title:       args[0],
+		Description: desc,
+		Impact:      impact,
+		Complexity:  complexity,
+		Tags:        parseTags(tags),
+		Status:      models.FeatureStatusProposed,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -127,7 +157,7 @@ func runFeatureAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	output(cmd, &feature, func(w io.Writer) {
-		fmt.Fprintf(w, "Created feature %q (%s)\n", feature.Name, feature.ID)
+		fmt.Fprintf(w, "Created feature %q (%s)\n", feature.Title, feature.ID)
 	})
 	return nil
 }
@@ -137,20 +167,20 @@ func runFeatureList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	featureListStatus, _ := cmd.Flags().GetString("status")
+	statusFilter, _ := cmd.Flags().GetString("status")
 
 	features, err := loadAllFeatures(projectID)
 	if err != nil {
 		return err
 	}
 
-	if featureListStatus != "" {
-		if !models.IsValidStatus(featureListStatus) {
-			return fmt.Errorf("invalid status %q (valid: %s)", featureListStatus, strings.Join(models.ValidStatuses, ", "))
+	if statusFilter != "" {
+		if !models.IsValidFeatureStatus(statusFilter) {
+			return fmt.Errorf("invalid status %q (valid: %s)", statusFilter, strings.Join(models.ValidFeatureStatuses, ", "))
 		}
 		var filtered []models.Feature
 		for _, f := range features {
-			if f.Status == featureListStatus {
+			if f.Status == statusFilter {
 				filtered = append(filtered, f)
 			}
 		}
@@ -162,14 +192,10 @@ func runFeatureList(cmd *cobra.Command, args []string) error {
 			fmt.Fprintln(w, "No features found.")
 			return
 		}
-		headers := []string{"ID", "NAME", "STATUS", "ASSIGNED", "BACKLOG"}
+		headers := []string{"ID", "TITLE", "STATUS", "IMPACT", "COMPLEXITY"}
 		var rows [][]string
 		for _, f := range features {
-			bl := ""
-			if f.IsBacklog {
-				bl = "yes"
-			}
-			rows = append(rows, []string{f.ID, f.Name, f.Status, f.AssignedTo, bl})
+			rows = append(rows, []string{f.ID, f.Title, f.Status, f.Impact, f.Complexity})
 		}
 		printTable(w, headers, rows)
 	})
@@ -190,17 +216,23 @@ func runFeatureShow(cmd *cobra.Command, args []string) error {
 	}
 
 	output(cmd, feature, func(w io.Writer) {
-		fmt.Fprintf(w, "ID:          %s\n", feature.ID)
-		fmt.Fprintf(w, "Name:        %s\n", feature.Name)
-		fmt.Fprintf(w, "Status:      %s\n", feature.Status)
-		if feature.Description != "" {
-			fmt.Fprintf(w, "Description: %s\n", feature.Description)
+		fmt.Fprintf(w, "ID:           %s\n", feature.ID)
+		fmt.Fprintf(w, "Title:        %s\n", feature.Title)
+		fmt.Fprintf(w, "Status:       %s\n", feature.Status)
+		if feature.Impact != "" {
+			fmt.Fprintf(w, "Impact:       %s\n", feature.Impact)
 		}
-		if feature.AssignedTo != "" {
-			fmt.Fprintf(w, "Assigned:    %s\n", feature.AssignedTo)
+		if feature.Complexity != "" {
+			fmt.Fprintf(w, "Complexity:   %s\n", feature.Complexity)
+		}
+		if feature.Description != "" {
+			fmt.Fprintf(w, "Desc:         %s\n", feature.Description)
+		}
+		if feature.PromotedFrom != "" {
+			fmt.Fprintf(w, "PromotedFrom: %s\n", feature.PromotedFrom)
 		}
 		if len(feature.Tags) > 0 {
-			fmt.Fprintf(w, "Tags:        %s\n", strings.Join(feature.Tags, ", "))
+			fmt.Fprintf(w, "Tags:         %s\n", strings.Join(feature.Tags, ", "))
 		}
 		if len(feature.Notes) > 0 {
 			fmt.Fprintf(w, "Notes:\n")
@@ -208,167 +240,32 @@ func runFeatureShow(cmd *cobra.Command, args []string) error {
 				fmt.Fprintf(w, "  [%s] %s\n", n.Timestamp.Format("2006-01-02 15:04:05"), n.Body)
 			}
 		}
-		fmt.Fprintf(w, "Backlog:     %v\n", feature.IsBacklog)
-		fmt.Fprintf(w, "Created:     %s\n", feature.CreatedAt.Format("2006-01-02 15:04:05"))
-		fmt.Fprintf(w, "Updated:     %s\n", feature.UpdatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(w, "Created:      %s\n", feature.CreatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(w, "Updated:      %s\n", feature.UpdatedAt.Format("2006-01-02 15:04:05"))
 	})
 	return nil
 }
 
-func runFeatureUpdate(cmd *cobra.Command, args []string) error {
+func runFeatureTriage(cmd *cobra.Command, args []string) error {
 	projectID, err := resolveProject(cmd)
 	if err != nil {
 		return err
 	}
-	featureUpdateStatus, _ := cmd.Flags().GetString("status")
-	featureUpdateDesc, _ := cmd.Flags().GetString("desc")
-	featureUpdateAssign, _ := cmd.Flags().GetString("assign")
-	featureUpdateTags, _ := cmd.Flags().GetString("tags")
+	impact, _ := cmd.Flags().GetString("impact")
+	complexity, _ := cmd.Flags().GetString("complexity")
+	note, _ := cmd.Flags().GetString("note")
+
+	if impact != "" && !models.IsValidLevel(impact) {
+		return fmt.Errorf("invalid impact %q (valid: low, medium, high)", impact)
+	}
+	if complexity != "" && !models.IsValidLevel(complexity) {
+		return fmt.Errorf("invalid complexity %q (valid: low, medium, high)", complexity)
+	}
+
 	projectDir, err := store.ProjectDir(projectID)
 	if err != nil {
 		return err
 	}
-
-	lock, err := store.AcquireLock(projectDir)
-	if err != nil {
-		return err
-	}
-	defer lock.Release()
-
-	feature, err := loadFeature(projectID, args[0])
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return notFoundErr("feature", args[0])
-		}
-		return err
-	}
-
-	if featureUpdateStatus != "" {
-		if !models.IsValidStatus(featureUpdateStatus) {
-			return fmt.Errorf("invalid status %q (valid: %s)", featureUpdateStatus, strings.Join(models.ValidStatuses, ", "))
-		}
-		feature.Status = featureUpdateStatus
-	}
-	if cmd.Flags().Changed("desc") {
-		feature.Description = featureUpdateDesc
-	}
-	if cmd.Flags().Changed("assign") {
-		feature.AssignedTo = featureUpdateAssign
-	}
-	if cmd.Flags().Changed("tags") {
-		feature.Tags = parseTags(featureUpdateTags)
-	}
-	feature.UpdatedAt = time.Now().UTC()
-
-	path := filepath.Join(projectDir, "features", feature.ID+".json")
-	if err := store.SaveJSON(path, feature); err != nil {
-		return fmt.Errorf("save feature: %w", err)
-	}
-
-	output(cmd, feature, func(w io.Writer) {
-		fmt.Fprintf(w, "Updated feature %q (%s)\n", feature.Name, feature.ID)
-	})
-	return nil
-}
-
-func runFeatureDelete(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject(cmd)
-	if err != nil {
-		return err
-	}
-	projectDir, err := store.ProjectDir(projectID)
-	if err != nil {
-		return err
-	}
-
-	moveTasksTo, _ := cmd.Flags().GetString("move-tasks-to")
-
-	lock, err := store.AcquireLock(projectDir)
-	if err != nil {
-		return err
-	}
-	defer lock.Release()
-
-	feature, err := loadFeature(projectID, args[0])
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return notFoundErr("feature", args[0])
-		}
-		return err
-	}
-
-	if feature.IsBacklog {
-		return fmt.Errorf("cannot delete the backlog feature")
-	}
-
-	tasks, err := loadAllTasks(projectID)
-	if err != nil {
-		return err
-	}
-
-	var belongingTasks []*models.Task
-	for i := range tasks {
-		if tasks[i].FeatureID == feature.ID {
-			belongingTasks = append(belongingTasks, &tasks[i])
-		}
-	}
-
-	if len(belongingTasks) > 0 {
-		if moveTasksTo == "" {
-			ids := make([]string, len(belongingTasks))
-			for i, t := range belongingTasks {
-				ids[i] = t.ID
-			}
-			return fmt.Errorf("feature %s has %d task(s) (%s); use --move-tasks-to to reassign them first",
-				feature.ID, len(belongingTasks), strings.Join(ids, ", "))
-		}
-
-		// Validate target feature.
-		target, err := loadFeature(projectID, moveTasksTo)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				return notFoundErr("feature", moveTasksTo)
-			}
-			return err
-		}
-		if target.Status == models.StatusDone {
-			return fmt.Errorf("cannot move tasks to feature %s because it is done", target.ID)
-		}
-
-		now := time.Now().UTC()
-		for _, t := range belongingTasks {
-			t.FeatureID = target.ID
-			t.UpdatedAt = now
-			p := filepath.Join(projectDir, "tasks", t.ID+".json")
-			if err := store.SaveJSON(p, t); err != nil {
-				return fmt.Errorf("update task %s: %w", t.ID, err)
-			}
-		}
-	}
-
-	path := filepath.Join(projectDir, "features", feature.ID+".json")
-	if err := store.DeleteFile(path); err != nil {
-		return fmt.Errorf("delete feature: %w", err)
-	}
-
-	output(cmd, feature, func(w io.Writer) {
-		fmt.Fprintf(w, "Deleted feature %q (%s)\n", feature.Name, feature.ID)
-	})
-	return nil
-}
-
-// --- helpers ---
-
-func runFeatureNote(cmd *cobra.Command, args []string) error {
-	projectID, err := resolveProject(cmd)
-	if err != nil {
-		return err
-	}
-	projectDir, err := store.ProjectDir(projectID)
-	if err != nil {
-		return err
-	}
-
 	lock, err := store.AcquireLock(projectDir)
 	if err != nil {
 		return err
@@ -384,10 +281,16 @@ func runFeatureNote(cmd *cobra.Command, args []string) error {
 	}
 
 	now := time.Now().UTC()
-	feature.Notes = append(feature.Notes, models.Note{
-		Timestamp: now,
-		Body:      args[1],
-	})
+	feature.Status = models.FeatureStatusTriaged
+	if impact != "" {
+		feature.Impact = impact
+	}
+	if complexity != "" {
+		feature.Complexity = complexity
+	}
+	if note != "" {
+		feature.Notes = append(feature.Notes, models.Note{Timestamp: now, Body: note})
+	}
 	feature.UpdatedAt = now
 
 	path := filepath.Join(projectDir, "features", feature.ID+".json")
@@ -396,10 +299,275 @@ func runFeatureNote(cmd *cobra.Command, args []string) error {
 	}
 
 	output(cmd, feature, func(w io.Writer) {
-		fmt.Fprintf(w, "Note added to feature %q (%s)\n", feature.Name, feature.ID)
+		fmt.Fprintf(w, "Triaged feature %q (%s)\n", feature.Title, feature.ID)
 	})
 	return nil
 }
+
+func runFeatureStart(cmd *cobra.Command, args []string) error {
+	projectID, err := resolveProject(cmd)
+	if err != nil {
+		return err
+	}
+	note, _ := cmd.Flags().GetString("note")
+
+	projectDir, err := store.ProjectDir(projectID)
+	if err != nil {
+		return err
+	}
+	lock, err := store.AcquireLock(projectDir)
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+
+	feature, err := loadFeature(projectID, args[0])
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return notFoundErr("feature", args[0])
+		}
+		return err
+	}
+
+	now := time.Now().UTC()
+	feature.Status = models.FeatureStatusInProgress
+	if note != "" {
+		feature.Notes = append(feature.Notes, models.Note{Timestamp: now, Body: note})
+	}
+	feature.UpdatedAt = now
+
+	path := filepath.Join(projectDir, "features", feature.ID+".json")
+	if err := store.SaveJSON(path, feature); err != nil {
+		return fmt.Errorf("save feature: %w", err)
+	}
+
+	output(cmd, feature, func(w io.Writer) {
+		fmt.Fprintf(w, "Started feature %q (%s)\n", feature.Title, feature.ID)
+	})
+	return nil
+}
+
+func runFeatureDone(cmd *cobra.Command, args []string) error {
+	projectID, err := resolveProject(cmd)
+	if err != nil {
+		return err
+	}
+	note, _ := cmd.Flags().GetString("note")
+
+	projectDir, err := store.ProjectDir(projectID)
+	if err != nil {
+		return err
+	}
+	lock, err := store.AcquireLock(projectDir)
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+
+	feature, err := loadFeature(projectID, args[0])
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return notFoundErr("feature", args[0])
+		}
+		return err
+	}
+
+	now := time.Now().UTC()
+	feature.Status = models.FeatureStatusDone
+	if note != "" {
+		feature.Notes = append(feature.Notes, models.Note{Timestamp: now, Body: note})
+	}
+	feature.UpdatedAt = now
+
+	path := filepath.Join(projectDir, "features", feature.ID+".json")
+	if err := store.SaveJSON(path, feature); err != nil {
+		return fmt.Errorf("save feature: %w", err)
+	}
+
+	output(cmd, feature, func(w io.Writer) {
+		fmt.Fprintf(w, "Completed feature %q (%s)\n", feature.Title, feature.ID)
+	})
+	return nil
+}
+
+func runFeatureReject(cmd *cobra.Command, args []string) error {
+	projectID, err := resolveProject(cmd)
+	if err != nil {
+		return err
+	}
+	note, _ := cmd.Flags().GetString("note")
+
+	projectDir, err := store.ProjectDir(projectID)
+	if err != nil {
+		return err
+	}
+	lock, err := store.AcquireLock(projectDir)
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+
+	feature, err := loadFeature(projectID, args[0])
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return notFoundErr("feature", args[0])
+		}
+		return err
+	}
+
+	now := time.Now().UTC()
+	feature.Status = models.FeatureStatusRejected
+	if note != "" {
+		feature.Notes = append(feature.Notes, models.Note{Timestamp: now, Body: note})
+	}
+	feature.UpdatedAt = now
+
+	path := filepath.Join(projectDir, "features", feature.ID+".json")
+	if err := store.SaveJSON(path, feature); err != nil {
+		return fmt.Errorf("save feature: %w", err)
+	}
+
+	output(cmd, feature, func(w io.Writer) {
+		fmt.Fprintf(w, "Rejected feature %q (%s)\n", feature.Title, feature.ID)
+	})
+	return nil
+}
+
+func runFeatureNote(cmd *cobra.Command, args []string) error {
+	projectID, err := resolveProject(cmd)
+	if err != nil {
+		return err
+	}
+	projectDir, err := store.ProjectDir(projectID)
+	if err != nil {
+		return err
+	}
+	lock, err := store.AcquireLock(projectDir)
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+
+	feature, err := loadFeature(projectID, args[0])
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return notFoundErr("feature", args[0])
+		}
+		return err
+	}
+
+	now := time.Now().UTC()
+	feature.Notes = append(feature.Notes, models.Note{Timestamp: now, Body: args[1]})
+	feature.UpdatedAt = now
+
+	path := filepath.Join(projectDir, "features", feature.ID+".json")
+	if err := store.SaveJSON(path, feature); err != nil {
+		return fmt.Errorf("save feature: %w", err)
+	}
+
+	output(cmd, feature, func(w io.Writer) {
+		fmt.Fprintf(w, "Note added to feature %q (%s)\n", feature.Title, feature.ID)
+	})
+	return nil
+}
+
+func runFeatureUpdate(cmd *cobra.Command, args []string) error {
+	projectID, err := resolveProject(cmd)
+	if err != nil {
+		return err
+	}
+	projectDir, err := store.ProjectDir(projectID)
+	if err != nil {
+		return err
+	}
+	lock, err := store.AcquireLock(projectDir)
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+
+	feature, err := loadFeature(projectID, args[0])
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return notFoundErr("feature", args[0])
+		}
+		return err
+	}
+
+	if cmd.Flags().Changed("title") {
+		title, _ := cmd.Flags().GetString("title")
+		feature.Title = title
+	}
+	if cmd.Flags().Changed("desc") {
+		desc, _ := cmd.Flags().GetString("desc")
+		feature.Description = desc
+	}
+	if cmd.Flags().Changed("impact") {
+		impact, _ := cmd.Flags().GetString("impact")
+		if impact != "" && !models.IsValidLevel(impact) {
+			return fmt.Errorf("invalid impact %q (valid: low, medium, high)", impact)
+		}
+		feature.Impact = impact
+	}
+	if cmd.Flags().Changed("complexity") {
+		complexity, _ := cmd.Flags().GetString("complexity")
+		if complexity != "" && !models.IsValidLevel(complexity) {
+			return fmt.Errorf("invalid complexity %q (valid: low, medium, high)", complexity)
+		}
+		feature.Complexity = complexity
+	}
+	if cmd.Flags().Changed("tags") {
+		tags, _ := cmd.Flags().GetString("tags")
+		feature.Tags = parseTags(tags)
+	}
+	feature.UpdatedAt = time.Now().UTC()
+
+	path := filepath.Join(projectDir, "features", feature.ID+".json")
+	if err := store.SaveJSON(path, feature); err != nil {
+		return fmt.Errorf("save feature: %w", err)
+	}
+
+	output(cmd, feature, func(w io.Writer) {
+		fmt.Fprintf(w, "Updated feature %q (%s)\n", feature.Title, feature.ID)
+	})
+	return nil
+}
+
+func runFeatureDelete(cmd *cobra.Command, args []string) error {
+	projectID, err := resolveProject(cmd)
+	if err != nil {
+		return err
+	}
+	projectDir, err := store.ProjectDir(projectID)
+	if err != nil {
+		return err
+	}
+	lock, err := store.AcquireLock(projectDir)
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+
+	feature, err := loadFeature(projectID, args[0])
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return notFoundErr("feature", args[0])
+		}
+		return err
+	}
+
+	path := filepath.Join(projectDir, "features", feature.ID+".json")
+	if err := store.DeleteFile(path); err != nil {
+		return fmt.Errorf("delete feature: %w", err)
+	}
+
+	output(cmd, feature, func(w io.Writer) {
+		fmt.Fprintf(w, "Deleted feature %q (%s)\n", feature.Title, feature.ID)
+	})
+	return nil
+}
+
+// --- helpers ---
 
 func loadAllFeatures(projectID string) ([]models.Feature, error) {
 	projectDir, err := store.ProjectDir(projectID)
@@ -416,11 +584,16 @@ func loadAllFeatures(projectID string) ([]models.Feature, error) {
 		if !strings.HasSuffix(name, ".json") {
 			continue
 		}
+		jsonPath := filepath.Join(featuresDir, name)
 		var f models.Feature
-		path := filepath.Join(featuresDir, name)
-		if err := store.LoadJSON(path, &f); err != nil {
-			return nil, fmt.Errorf("load %s: %w", path, err)
+		if err := store.LoadJSON(jsonPath, &f); err != nil {
+			return nil, fmt.Errorf("load %s: %w", jsonPath, err)
 		}
+		plan, err := store.LoadPlan(jsonPath)
+		if err != nil {
+			return nil, err
+		}
+		f.Plan = plan
 		features = append(features, f)
 	}
 	return features, nil
@@ -431,38 +604,15 @@ func loadFeature(projectID, featureID string) (*models.Feature, error) {
 	if err != nil {
 		return nil, err
 	}
+	jsonPath := filepath.Join(projectDir, "features", featureID+".json")
 	var f models.Feature
-	path := filepath.Join(projectDir, "features", featureID+".json")
-	if err := store.LoadJSON(path, &f); err != nil {
+	if err := store.LoadJSON(jsonPath, &f); err != nil {
 		return nil, err
 	}
-	return &f, nil
-}
-
-func findBacklogFeature(projectID string) (*models.Feature, error) {
-	features, err := loadAllFeatures(projectID)
+	plan, err := store.LoadPlan(jsonPath)
 	if err != nil {
 		return nil, err
 	}
-	for _, f := range features {
-		if f.IsBacklog {
-			return &f, nil
-		}
-	}
-	return nil, fmt.Errorf("no backlog feature found for project %s", projectID)
-}
-
-func parseTags(s string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	tags := make([]string, 0, len(parts))
-	for _, p := range parts {
-		t := strings.TrimSpace(p)
-		if t != "" {
-			tags = append(tags, t)
-		}
-	}
-	return tags
+	f.Plan = plan
+	return &f, nil
 }
