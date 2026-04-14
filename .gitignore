@@ -4,7 +4,6 @@
 *.dll
 *.so
 *.dylib
-bira
 
 # Build output
 dist/
@@ -35,6 +34,3 @@ Thumbs.db
 
 # Docker files
 !Dockerfile.test
-
-# Skills
-!.agents/skills/**
