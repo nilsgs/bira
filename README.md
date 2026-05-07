@@ -1,8 +1,8 @@
-![bira Logo](img/bira_logo_small.png)
+﻿![bira Logo](img/bira_logo_small.png)
 
 # bira
 
-AI-agent optimised CLI for capturing and coordinating **ideas**, **bugs**, and **features**. Designed as a lightweight support tool for agentic development workflows — bira tracks intent, not execution. Agents manage their own implementation steps.
+AI-agent optimised CLI for capturing and coordinating **ideas**, **bugs**, and **features**. Designed as a lightweight support tool for agentic development workflows â€” bira tracks intent, not execution. Agents manage their own implementation steps.
 
 ## Install
 
@@ -72,7 +72,7 @@ bira exposes two complementary interfaces that share the same `~/.bira` store:
 The `bira` binary. All commands accept `--json` for machine-readable output. Use with shell-based agents, scripts, and terminal workflows.
 
 ### MCP server
-`bira mcp` starts a [Model Context Protocol](https://modelcontextprotocol.io) server over **stdio**. The IDE extension spawns it as a child process — no port, no daemon.
+`bira mcp` starts a [Model Context Protocol](https://modelcontextprotocol.io) server over **stdio**. The IDE extension spawns it as a child process â€” no port, no daemon.
 
 **Config** (`mcp.json` or VS Code settings):
 ```json
@@ -128,7 +128,7 @@ bira idea note <id> <message>
 bira idea delete <id>
 ```
 
-**Lifecycle:** `inbox → triaged → promoted / rejected`
+**Lifecycle:** `inbox â†’ triaged â†’ promoted / rejected`
 
 ---
 
@@ -139,8 +139,8 @@ bira bug create [-p <id|slug>] <title> [--desc <text>] [--reported-by <label>] [
 bira bug list [-p <id>] [--status <status>] [--criticality <level>]
 bira bug show <id>
 bira bug triage <id> --criticality low|medium|high|critical [--tags t1,t2]
-bira bug start <id>              # status → in-progress
-bira bug done <id>               # status → fixed
+bira bug start <id>              # status â†’ in-progress
+bira bug done <id>               # status â†’ fixed
 bira bug wont-fix <id> [--note <text>]
 bira bug plan <id>               # print plan sidecar
 bira bug plan <id> --stdin       # write plan from stdin
@@ -148,9 +148,9 @@ bira bug note <id> <message>
 bira bug delete <id>
 ```
 
-**Lifecycle:** `open → triaged → in-progress → fixed / wont-fix`
+**Lifecycle:** `open â†’ triaged â†’ in-progress â†’ fixed / wont-fix`
 
-`-p` on `create` accepts a project **name slug** (lowercase, hyphenated) or exact project ID — enables cross-repo bug filing without leaving the current context.
+`-p` on `create` accepts a project **name slug** (lowercase, hyphenated) or exact project ID â€” enables cross-repo bug filing without leaving the current context.
 
 ---
 
@@ -161,8 +161,8 @@ bira feature add <title> [--desc <text>] [--tags t1,t2]
 bira feature list [--status <status>]
 bira feature show <id>
 bira feature triage <id> --impact low|medium|high --complexity low|medium|high [--tags t1,t2]
-bira feature start <id>          # status → in-progress
-bira feature done <id>           # status → done
+bira feature start <id>          # status â†’ in-progress
+bira feature done <id>           # status â†’ done
 bira feature reject <id> [--note <text>]
 bira feature plan <id>           # print plan sidecar
 bira feature plan <id> --stdin   # write plan from stdin
@@ -170,7 +170,7 @@ bira feature note <id> <message>
 bira feature delete <id>
 ```
 
-**Lifecycle:** `proposed → triaged → in-progress → done / rejected`
+**Lifecycle:** `proposed â†’ triaged â†’ in-progress â†’ done / rejected`
 
 ---
 
@@ -209,9 +209,9 @@ Starts the MCP stdio server. 26 tools covering all CRUD and lifecycle operations
 
 Every idea, bug, and feature has an optional Markdown sidecar (`<id>.plan.md`) stored alongside its JSON data file.
 
-- **Idea plan** — early thinking, research notes
-- **Bug plan** — reproduction steps, investigation findings, fix plan
-- **Feature plan** — implementation plan the agent executes
+- **Idea plan** â€” early thinking, research notes
+- **Bug plan** â€” reproduction steps, investigation findings, fix plan
+- **Feature plan** â€” implementation plan the agent executes
 
 `show --json` always includes a `plan` field (raw Markdown string, `""` if absent). When an idea is promoted to a feature, its plan sidecar is automatically copied to the new feature.
 
@@ -219,7 +219,7 @@ Every idea, bug, and feature has an optional Markdown sidecar (`<id>.plan.md`) s
 
 ## Data storage
 
-All data lives in `~/.bira/` — no database, no daemon. Set `BIRA_HOME` to override.
+All data lives in `~/.bira/` â€” no database, no daemon. Set `BIRA_HOME` to override.
 
 ```
 ~/.bira/
@@ -228,60 +228,61 @@ All data lives in `~/.bira/` — no database, no daemon. Set `BIRA_HOME` to over
       meta.json
       ideas/
         <idea-id>.json
-        <idea-id>.plan.md     ← optional
+        <idea-id>.plan.md     â† optional
       bugs/
         <bug-id>.json
-        <bug-id>.plan.md      ← optional
+        <bug-id>.plan.md      â† optional
       features/
         <feature-id>.json
-        <feature-id>.plan.md  ← optional
+        <feature-id>.plan.md  â† optional
 ```
 
-`.bira` at your repo root holds the `project_id` — a lightweight pointer into `~/.bira`.
+`.bira` at your repo root holds the `project_id` â€” a lightweight pointer into `~/.bira`.
 
 ---
 
 ## AI agent design invariants
 
-- `--json` on **every** command → clean JSON to stdout
-- All errors go to **stderr** — stdout is always pure data
-- **No interactive prompts** — all input is via flags
+- `--json` on **every** command â†’ clean JSON to stdout
+- All errors go to **stderr** â€” stdout is always pure data
+- **No interactive prompts** â€” all input is via flags
 - Mutating commands echo the affected entity on stdout
-- Exit codes: `0` success · `1` error · `2` not found
+- Exit codes: `0` success Â· `1` error Â· `2` not found
 - IDs are 8-character hex strings
-- **Empty collections always serialize as `[]`** — never `null`
+- **Empty collections always serialize as `[]`** â€” never `null`
 
 ---
 
 ## Development
 
-### Build
+Prerequisites:
+
+- Go 1.26+
+- Task v3, installed from the official instructions: <https://taskfile.dev/docs/installation>
+- Docker or Podman for `task smoke` and `task ci`
 
 ```sh
-make build          # builds ./bira.exe (Windows) or ./bira
-make install        # go install with version stamp
-make cross          # all 6 targets (linux/darwin/windows × amd64/arm64) → dist/
-make clean
+task test     # native Go tests
+task build    # build local binary into dist/
+task install  # copy dist/bira to ~/.bira/bin
+task smoke    # run Smoko specs; .smokorc builds the test image
+task ci       # run test, build, and smoke
+task cross    # build the full OS/architecture matrix into dist/
+task clean    # remove dist/
 ```
 
-### Test
-
-```sh
-make test-local     # native go test (Windows/Linux/macOS)
-make test           # run in Docker container (golang:1.26)
-```
+Equivalent native Go test command for debugging Task itself:
 
 ```sh
 cd src && go test ./... -v -count=1
 ```
 
-Tests use isolated environments via `BIRA_HOME` — each test gets its own temp directory. Test isolation is enforced via `NewRootCmd()` (fresh command tree per test, no shared state).
-
+Tests use isolated environments via `BIRA_HOME` - each test gets its own temp directory. Test isolation is enforced via `NewRootCmd()` (fresh command tree per test, no shared state).
 ### Bump version
 
 Edit [VERSION](VERSION) (single line, semver). The next build stamps `bira --version` as `<version>+<git-short-hash>`.
 
 | Build method | `bira --version` |
 |---|---|
-| `make build` / install scripts | `0.1.0+abc1234` |
+| `task build` / install scripts | `0.1.0+abc1234` |
 | Plain `go build` (no ldflags) | `dev+none` |

@@ -3,17 +3,9 @@ set -euo pipefail
 
 INSTALL_DIR="$HOME/.bira/bin"
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION=$(cat "$REPO_DIR/VERSION")
-COMMIT=$(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
-echo "Building bira v${VERSION}+${COMMIT}..."
-cd "$REPO_DIR/src"
-go build -ldflags "-s -w -X bira/cmd.version=${VERSION} -X bira/cmd.commit=${COMMIT}" -o "$REPO_DIR/bira" .
-
-echo "Installing to $INSTALL_DIR..."
-mkdir -p "$INSTALL_DIR"
-mv "$REPO_DIR/bira" "$INSTALL_DIR/bira"
-chmod +x "$INSTALL_DIR/bira"
+sh "$REPO_DIR/scripts/build.sh"
+sh "$REPO_DIR/scripts/install.sh"
 
 # Add to PATH if not already present
 add_to_path() {

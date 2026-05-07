@@ -1,4 +1,4 @@
-# bira — Agent Bootstrap
+﻿# bira â€” Agent Bootstrap
 
 **bira** is a CLI and MCP server for capturing ideas, bugs, and feature proposals in agentic workflows.
 Agents drive bira. bira tracks intent, not execution steps.
@@ -16,7 +16,7 @@ src/
     store/      # JSON file store, plan sidecar helpers, slug resolution
     config/     # .bira pointer file (project_id)
 specs/          # Smoko smoke tests (.smoko files)
-skills/bira/    # SKILL.md — full agent workflow guide
+skills/bira/    # SKILL.md â€” full agent workflow guide
 ```
 
 ---
@@ -24,12 +24,12 @@ skills/bira/    # SKILL.md — full agent workflow guide
 ## Build & test commands
 
 ```sh
-make build                            # compile binary
-make test                             # Go unit tests in Docker
-make smoko                            # build Docker image + run all smoke tests
-make smoko-image                      # build Docker test image only
+task build                            # compile binary into dist/
+task test                             # native Go unit tests
+task smoke                            # build Docker image via .smokorc + run smoke tests
+task ci                               # test, build, smoke
 cd src && go build ./...              # quick local compile check
-cd src && go test ./... -v -count=1   # local unit tests without Docker
+cd src && go test ./... -v -count=1   # raw test fallback
 ```
 
 ---
@@ -72,9 +72,9 @@ See `skills/bira/SKILL.md` for full tool signatures and workflow recipes.
 
 ## CLI output contract
 
-- Every command accepts `--json` → structured JSON to stdout
-- Errors → stderr only; stdout stays clean
-- Exit codes: `0` success · `1` error · `2` not found
+- Every command accepts `--json` â†’ structured JSON to stdout
+- Errors â†’ stderr only; stdout stays clean
+- Exit codes: `0` success Â· `1` error Â· `2` not found
 - Empty collections serialize as `[]`, never `null`
 - `show --json` always includes a `plan` field (raw Markdown string, `""` if no sidecar)
 
@@ -84,9 +84,9 @@ See `skills/bira/SKILL.md` for full tool signatures and workflow recipes.
 
 | Entity | Statuses |
 |---|---|
-| Idea | `inbox` → `triaged` → `promoted` / `rejected` |
-| Bug | `open` → `triaged` → `in-progress` → `fixed` / `wont-fix` |
-| Feature | `proposed` → `triaged` → `in-progress` → `done` / `rejected` |
+| Idea | `inbox` â†’ `triaged` â†’ `promoted` / `rejected` |
+| Bug | `open` â†’ `triaged` â†’ `in-progress` â†’ `fixed` / `wont-fix` |
+| Feature | `proposed` â†’ `triaged` â†’ `in-progress` â†’ `done` / `rejected` |
 
 Key JSON fields: `id`, `title` (not `name`), `status`, `plan` (sidecar content on show).
 
@@ -96,8 +96,8 @@ Cross-project bug filing: `bira bug create -p <slug-or-id> "title"` where slug =
 
 ## Mandatory workflow rules
 
-1. **Run smoke tests** (`make smoko`) before marking any implementation complete.
+1. **Run smoke tests** (`task smoke`) before marking any implementation complete.
 2. **Update documentation** whenever CLI commands, entity contracts, or workflows change:
-   - `README.md` — user-facing command reference
-   - `AGENTS.md` — this file
-   - `skills/bira/SKILL.md` — agent workflow guide and JSON contract
+   - `README.md` â€” user-facing command reference
+   - `AGENTS.md` â€” this file
+   - `skills/bira/SKILL.md` â€” agent workflow guide and JSON contract
