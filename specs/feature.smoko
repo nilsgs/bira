@@ -1,3 +1,4 @@
+@feature
 Feature: bira feature
 
   Background:
@@ -9,44 +10,52 @@ Feature: bira feature
     And output contains "Created feature"
     And output contains "my-feature"
 
+  @json
   Scenario: Feature add --json returns structured output
     When I run "bira feature add json-feat --json"
     Then exit code is 0
     And output as JSON at path "$.title" equals "json-feat"
     And output as JSON at path "$.status" equals "proposed"
 
+  @json
   Scenario: Feature add with --desc sets description
     When I run "bira feature add flagged --desc 'a description' --json"
     Then exit code is 0
     And output as JSON at path "$.description" equals "a description"
 
+  @json @tags
   Scenario: Feature add with --tags
     When I run "bira feature add tagged --tags 'a,b,c' --json"
     Then exit code is 0
     And output as JSON at path "$.tags" exists
 
+  @list
   Scenario: Feature list shows features
     Given I run "bira feature add feat-one"
     When I run "bira feature list"
     Then exit code is 0
     And output contains "feat-one"
 
+  @json @list
   Scenario: Feature list --json returns array
     Given I run "bira feature add listed"
     When I run "bira feature list --json"
     Then exit code is 0
     And output contains "listed"
 
+  @list
   Scenario: Feature list --status filters by status
     Given I run "bira feature add open-feat"
     When I run "bira feature list --status proposed"
     Then exit code is 0
     And output contains "open-feat"
 
+  @failure @list
   Scenario: Feature list --status with invalid value fails
     When I run "bira feature list --status invalid"
     Then exit code is not 0
 
+  @show
   Scenario: Feature show displays feature details
     Given I run "bira feature add show-me --json"
     And I save JSON path "$.id" as $FID
@@ -56,6 +65,7 @@ Feature: bira feature
     And output contains "ID:"
     And output contains "Status:"
 
+  @json @show
   Scenario: Feature show --json returns structured output
     Given I run "bira feature add show-json --json"
     And I save JSON path "$.id" as $FID
@@ -63,10 +73,12 @@ Feature: bira feature
     Then exit code is 0
     And output as JSON at path "$.title" equals "show-json"
 
+  @failure @show
   Scenario: Feature show unknown ID returns exit 2
     When I run "bira feature show deadbeef"
     Then exit code is 2
 
+  @json @triage
   Scenario: Feature triage sets impact and complexity
     Given I run "bira feature add to-triage --json"
     And I save JSON path "$.id" as $FID
@@ -76,6 +88,7 @@ Feature: bira feature
     And output as JSON at path "$.impact" equals "high"
     And output as JSON at path "$.complexity" equals "medium"
 
+  @triage
   Scenario: Feature triage human output confirms triage
     Given I run "bira feature add triage-human --json"
     And I save JSON path "$.id" as $FID
@@ -83,6 +96,7 @@ Feature: bira feature
     Then exit code is 0
     And output contains "Triaged feature"
 
+  @json @start
   Scenario: Feature start marks in-progress
     Given I run "bira feature add to-start --json"
     And I save JSON path "$.id" as $FID
@@ -90,6 +104,7 @@ Feature: bira feature
     Then exit code is 0
     And output as JSON at path "$.status" equals "in-progress"
 
+  @done @json
   Scenario: Feature done marks completed
     Given I run "bira feature add to-done --json"
     And I save JSON path "$.id" as $FID
@@ -98,6 +113,7 @@ Feature: bira feature
     Then exit code is 0
     And output as JSON at path "$.status" equals "done"
 
+  @json @reject
   Scenario: Feature reject marks rejected
     Given I run "bira feature add to-reject --json"
     And I save JSON path "$.id" as $FID
@@ -105,6 +121,7 @@ Feature: bira feature
     Then exit code is 0
     And output as JSON at path "$.status" equals "rejected"
 
+  @reject
   Scenario: Feature reject human output confirms rejection
     Given I run "bira feature add reject-human --json"
     And I save JSON path "$.id" as $FID
@@ -112,6 +129,7 @@ Feature: bira feature
     Then exit code is 0
     And output contains "Rejected feature"
 
+  @note
   Scenario: Feature note adds a note to a feature
     Given I run "bira feature add to-note --json"
     And I save JSON path "$.id" as $FID
@@ -119,6 +137,7 @@ Feature: bira feature
     Then exit code is 0
     And output contains "Note added to feature"
 
+  @delete
   Scenario: Feature delete removes feature
     Given I run "bira feature add to-delete --json"
     And I save JSON path "$.id" as $FID

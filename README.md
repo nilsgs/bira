@@ -102,6 +102,8 @@ task cross    # build the full OS/architecture matrix into dist/
 task clean    # remove dist/
 ```
 
+Smoke specs use tags for focused runs, for example `smoko run specs/ --tag json`.
+
 The version is read from `VERSION` and stamped into the binary at build time.
 
 ## License

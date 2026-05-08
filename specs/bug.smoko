@@ -1,3 +1,4 @@
+@bug
 Feature: bira bug
 
   Background:
@@ -9,50 +10,59 @@ Feature: bira bug
     And output contains "Created bug"
     And output contains "my-bug"
 
+  @json
   Scenario: Bug create --json returns structured output
     When I run "bira bug create json-bug --json"
     Then exit code is 0
     And output as JSON at path "$.title" equals "json-bug"
     And output as JSON at path "$.status" equals "open"
 
+  @json
   Scenario: Bug create with --desc sets description
     When I run "bira bug create described --desc 'crash on startup' --json"
     Then exit code is 0
     And output as JSON at path "$.description" equals "crash on startup"
 
+  @json
   Scenario: Bug create with --reported-by sets reporter
     When I run "bira bug create reported --reported-by 'agent@other-tool' --json"
     Then exit code is 0
     And output as JSON at path "$.reported_by" equals "agent@other-tool"
 
+  @json @tags
   Scenario: Bug create with --tags
     When I run "bira bug create tagged --tags 'parser,crash' --json"
     Then exit code is 0
     And output as JSON at path "$.tags" exists
 
+  @list
   Scenario: Bug list shows bugs
     Given I run "bira bug create list-me"
     When I run "bira bug list"
     Then exit code is 0
     And output contains "list-me"
 
+  @json @list
   Scenario: Bug list --json returns array
     Given I run "bira bug create listed"
     When I run "bira bug list --json"
     Then exit code is 0
     And output contains "listed"
 
+  @list
   Scenario: Bug list --status filters by status
     Given I run "bira bug create open-bug"
     When I run "bira bug list --status open"
     Then exit code is 0
     And output contains "open-bug"
 
+  @failure @list
   Scenario: Bug list --status with invalid value fails
     When I run "bira bug list --status nosuchstatus"
     Then exit code is not 0
     And stderr contains "invalid status"
 
+  @show
   Scenario: Bug show displays bug details
     Given I run "bira bug create show-me --json"
     And I save JSON path "$.id" as $BID
@@ -62,6 +72,7 @@ Feature: bira bug
     And output contains "ID:"
     And output contains "Status:"
 
+  @json @show
   Scenario: Bug show --json returns structured output
     Given I run "bira bug create show-json --json"
     And I save JSON path "$.id" as $BID
@@ -70,10 +81,12 @@ Feature: bira bug
     And output as JSON at path "$.title" equals "show-json"
     And output as JSON at path "$.status" equals "open"
 
+  @failure @show
   Scenario: Bug show unknown ID returns exit 2
     When I run "bira bug show deadbeef"
     Then exit code is 2
 
+  @json @triage
   Scenario: Bug triage sets criticality and moves to triaged
     Given I run "bira bug create to-triage --json"
     And I save JSON path "$.id" as $BID
@@ -82,6 +95,7 @@ Feature: bira bug
     And output as JSON at path "$.status" equals "triaged"
     And output as JSON at path "$.criticality" equals "high"
 
+  @triage
   Scenario: Bug triage human output confirms triage
     Given I run "bira bug create triage-human --json"
     And I save JSON path "$.id" as $BID
@@ -89,6 +103,7 @@ Feature: bira bug
     Then exit code is 0
     And output contains "Triaged bug"
 
+  @json @start
   Scenario: Bug start marks in-progress
     Given I run "bira bug create to-start --json"
     And I save JSON path "$.id" as $BID
@@ -96,6 +111,7 @@ Feature: bira bug
     Then exit code is 0
     And output as JSON at path "$.status" equals "in-progress"
 
+  @done @json
   Scenario: Bug done marks fixed
     Given I run "bira bug create to-fix --json"
     And I save JSON path "$.id" as $BID
@@ -104,6 +120,7 @@ Feature: bira bug
     Then exit code is 0
     And output as JSON at path "$.status" equals "fixed"
 
+  @json
   Scenario: Bug wont-fix marks wont-fix
     Given I run "bira bug create to-drop --json"
     And I save JSON path "$.id" as $BID
@@ -118,6 +135,7 @@ Feature: bira bug
     Then exit code is 0
     And output contains "wont-fix"
 
+  @note
   Scenario: Bug note appends a note
     Given I run "bira bug create to-note --json"
     And I save JSON path "$.id" as $BID
@@ -125,6 +143,7 @@ Feature: bira bug
     Then exit code is 0
     And output contains "Note added to bug"
 
+  @delete
   Scenario: Bug delete removes the bug
     Given I run "bira bug create to-delete --json"
     And I save JSON path "$.id" as $BID
@@ -132,10 +151,12 @@ Feature: bira bug
     Then exit code is 0
     And output contains "Deleted bug"
 
+  @delete @failure
   Scenario: Bug delete unknown ID returns exit 2
     When I run "bira bug delete deadbeef"
     Then exit code is 2
 
+  @json @project-ref @workdir
   Scenario: Bug filed against another project via --project flag
     Given the directory "other" exists
     Given the working directory is "other"

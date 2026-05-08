@@ -1,3 +1,4 @@
+@init
 Feature: bira init
 
   Scenario: Init creates a project in the current directory
@@ -18,12 +19,14 @@ Feature: bira init
     Then exit code is 0
     And output contains "custom-name"
 
+  @json
   Scenario: Init --json returns structured project output
     When I run "bira init --name json-proj --json"
     Then exit code is 0
     And output as JSON at path "$.name" equals "json-proj"
     And output as JSON at path "$.id" exists
 
+  @failure
   Scenario: Init fails when already initialized
     Given I run "bira init --name first"
     When I run "bira init --name second"

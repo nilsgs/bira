@@ -1,18 +1,22 @@
+@project
 Feature: bira project
 
   Background:
     Given I run "bira init --name test-project"
 
+  @list
   Scenario: Project list shows initialized project
     When I run "bira project list"
     Then exit code is 0
     And output contains "test-project"
 
+  @json @list
   Scenario: Project list --json returns array
     When I run "bira project list --json"
     Then exit code is 0
     And output contains "test-project"
 
+  @show
   Scenario: Project show displays details of current project
     When I run "bira project show"
     Then exit code is 0
@@ -20,12 +24,14 @@ Feature: bira project
     And output contains "ID:"
     And output contains "Repo:"
 
+  @json @show
   Scenario: Project show --json returns structured output
     When I run "bira project show --json"
     Then exit code is 0
     And output as JSON at path "$.name" equals "test-project"
     And output as JSON at path "$.id" exists
 
+  @project-ref @show
   Scenario: Project show by explicit ID
     Given I run "bira project show --json"
     And I save JSON path "$.id" as $PID
@@ -33,12 +39,14 @@ Feature: bira project
     Then exit code is 0
     And output contains "test-project"
 
+  @delete @failure
   Scenario: Project delete requires --yes flag
     Given I run "bira project show --json"
     And I save JSON path "$.id" as $PID
     When I run "bira project delete $PID"
     Then exit code is not 0
 
+  @delete
   Scenario: Project delete with --yes removes project
     Given I run "bira project show --json"
     And I save JSON path "$.id" as $PID

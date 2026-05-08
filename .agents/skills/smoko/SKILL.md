@@ -10,11 +10,12 @@ Use this guide to write correct Smoko scenarios and stay within the DSL the tool
 ## Core model
 
 - Treat each `Scenario` as one isolated test run in a fresh Docker container.
-- Use `Background` for setup shared by every scenario in the feature.
+- Use `Background` for setup shared by every scenario in the feature; it may contain only `Given` steps.
 - Expect the working directory inside the container to be `/smoko-work`.
 - Execute `Given` steps in source order.
-- Use a single `When` step as the action under test.
+- Use exactly one `When` step as the action under test.
 - Use `Then` and inherited `And` or `But` steps for assertions. `And`/`But` inherit their type from the preceding keyword (`Given`, `When`, or `Then`).
+- Keep scenario steps in strict order: all `Given` setup first, then the single `When`, then one or more `Then` assertions.
 
 ## Output modes
 
@@ -22,6 +23,7 @@ Use this guide to write correct Smoko scenarios and stay within the DSL the tool
 - Use `smoko run ... --output json` when another tool or agent will parse the result.
 - Default text mode includes runtime in live scenario status lines, per-feature totals, and the suite summary.
 - JSON mode emits one structured document to stdout with suite, feature, and scenario durations plus assertion metadata.
+- Build and Docker image readiness status is written to stderr, keeping JSON stdout parseable while showing progress for slow builds or pulls. Build command output is shown on failure, or streamed during successful builds when `--verbose` is set.
 - Prefer JSON mode for agent retries, diagnostics extraction, or any workflow that needs stable machine-readable fields.
 
 ## Supported structure
@@ -46,6 +48,42 @@ Image resolution precedence:
 1. `--image`
 2. `Image:` in the `.smoko` file
 3. `.smokorc`
+
+## Tags
+
+Use tags for scenario selection and discovery.
+
+```gherkin
+@cli @requires-docker
+Feature: Repo commands
+
+  @git
+  Scenario: Reports dirty worktree
+    When I run "my-cli status"
+    Then exit code is 0
+```
+
+Rules:
+- Tags may appear only immediately before `Feature:` or `Scenario:`.
+- Feature tags apply to every scenario in that feature.
+- Scenario effective tags are feature tags plus scenario tags.
+- Tags in spec files must start with `@`.
+- Valid names match `[A-Za-z0-9][A-Za-z0-9_-]*`; prefer lowercase kebab-case in examples.
+- Tags before `Background:` or steps are invalid.
+
+Filtering:
+
+```sh
+smoko run specs/ --tag git
+smoko run specs/ --tag git --tag cli
+smoko run specs/ --skip-tag slow
+smoko run specs/ --tag git --skip-tag slow
+smoko run specs/ --list --tag git
+```
+
+Multiple `--tag` values are ORed. `--skip-tag` excludes matching scenarios and wins over includes. CLI tag values may be passed with or without `@`. If a tag filter selects zero scenarios, Smoko fails rather than reporting a passing empty run.
+
+Normal text run output stays tag-free; `--list` shows tags and JSON output includes effective scenario tags.
 
 ## Given
 
@@ -78,15 +116,18 @@ Given the working directory is "path/to/subdir"
 ```
 
 Behavior:
+- `Given` file and directory setup paths are confined to `/smoko-work`.
+- Relative setup paths resolve under `/smoko-work`; absolute setup paths must already be under `/smoko-work`.
+- `..` path segments are rejected in setup paths.
 - Changes the working directory for all subsequent `Given I run` and `When I run` steps in the scenario.
-- The path can be relative to the scenario root (`/smoko-work`) or absolute. Relative paths are resolved as `/smoko-work/<path>`; absolute paths are used as-is.
+- The working directory path can be relative to the scenario root (`/smoko-work`) or absolute under `/smoko-work`.
 - The directory must already exist; if not, the scenario fails immediately with a clear error.
 - Resets to `/smoko-work` automatically at the start of each new scenario.
 - To reset the working directory back to the scenario root mid-scenario, use an absolute path:
   ```gherkin
   Given the working directory is "/smoko-work"
   ```
-- `Then` file and directory assertions always use paths relative to `/smoko-work`, regardless of this step.
+- `Then` file and directory assertions use paths relative to `/smoko-work` unless an absolute assertion path is provided.
 
 Use this step when the CLI under test needs to run from a subdirectory (e.g., a tool that walks up to find a project root):
 
@@ -114,7 +155,7 @@ Given I run "cp source.txt target.txt"
 ```
 
 Behavior:
-- Run the command in `/smoko-work`.
+- Run the command in the current scenario working directory, initially `/smoko-work` and later changed by `Given the working directory is`.
 - Source `.smoko_env` first if it exists.
 - Fail the scenario immediately if the command exits non-zero.
 - Use this for imperative setup, not for the main behavior under test.
@@ -137,7 +178,7 @@ Given I run "my-cli version"
 And I save pattern "v([0-9.]+)" as $VERSION
 ```
 
-The variable is written to `.smoko_env` immediately, making it available to subsequent `Given I run`, `When I run`, file content steps, and **Then/And file and directory path assertions** via `$VAR` expansion (e.g. `Then file "$OUTDIR/result.json" exists`).
+The variable is written to `.smoko_env` immediately, making it available to subsequent `Given I run` and `When I run` shell commands. Smoko also expands captured variables in **Then/And file and directory path arguments** (e.g. `Then file "$OUTDIR/result.json" exists`). File content blocks are literal; Smoko does not expand `$VAR` inside them.
 
 Save steps must immediately follow a `Given I run` step. Multiple saves after the same run are allowed:
 
@@ -146,6 +187,41 @@ Given I run "my-cli info --json"
 And I save JSON path "$.name" as $APP_NAME
 And I save JSON path "$.version" as $APP_VERSION
 ```
+
+### Git fixtures
+
+Prefer the built-in Git fixture steps over raw `git init`, `git config`, `git add`, and `git commit` setup commands when a scenario only needs local repository state.
+
+```gherkin
+Given a git repository "repo" exists
+Given git repository "repo" has committed file "README.md" with content:
+  hello
+Given git repository "repo" has untracked file "scratch.txt" with content:
+  draft
+Given git repository "repo" has modified file "README.md" with content:
+  changed
+Given git repository "repo" is on branch "feature/name"
+```
+
+Behavior:
+- Requires `git` on `PATH` in the test image.
+- Repositories are confined to `/smoko-work`; relative repo paths resolve there.
+- New repositories use `main` and an empty initial commit.
+- `committed file` creates the repository if needed and commits only that file.
+- `modified file` requires the file to already be tracked.
+- File paths inside a Git repository are relative to the repository root and must not contain `..`.
+- Use these steps for local repository state only; keep remotes, credentials, submodules, and hosted Git provider behavior explicit in the scenario setup.
+- Keep the CLI behavior under test in the `When` step.
+
+Git assertions:
+
+```gherkin
+Then git repository "repo" is clean
+Then git repository "repo" is dirty
+Then git repository "repo" has branch "feature/name"
+```
+
+Git assertion repository paths expand captured variables.
 
 ## When
 
@@ -174,6 +250,8 @@ When I run "command" with input "stdin data"
 ```gherkin
 When I run "command" expecting exit code 1
 ```
+
+This records an assertion on the `When` step. If the command exits with a different code, the scenario is marked failed but subsequent `Then` assertions are still evaluated and reported.
 
 `When` captures stdout, stderr, and exit code.
 
@@ -242,6 +320,7 @@ Rules:
 - Use JSON literals inline for scalars and compact values.
 - Use block JSON after `equals:` for arrays or objects.
 - `equals` requires the JSONPath to resolve to exactly one value.
+- Assertion steps must match a supported form exactly; extra trailing words are rejected as unknown assertions.
 
 ### File existence
 
@@ -273,6 +352,8 @@ Then directory "path/to/dir" exists
 Then directory "path/to/dir" does not exist
 ```
 
+Assertion paths resolve relative paths under `/smoko-work`. Absolute assertion paths are allowed for checking files created elsewhere in the container, such as `/tmp/out.txt`. Any `..` path segment is rejected.
+
 ## Patterns
 
 ### Working directory for directory-aware CLIs
@@ -280,15 +361,15 @@ Then directory "path/to/dir" does not exist
 Use `Given the working directory is "..."` instead of `sh -c 'cd ... && ...'` in the `When` step:
 
 ```gherkin
-# Before — embeds shell logic in the action step, POSIX-only:
+# Before - embeds shell logic in the action step, POSIX-only:
 When I run "sh -c 'cd src/App && mycli bump --major'"
 
-# After — clean Given/When/Then separation:
+# After - clean Given/When/Then separation:
 Given the working directory is "src/App"
 When I run "mycli bump --major"
 ```
 
-`Then` file paths remain relative to `/smoko-work` (the scenario root), not the working directory.
+`Then` file paths remain relative to `/smoko-work` (the scenario root), not the working directory, unless you provide an absolute assertion path. `..` path segments are rejected.
 
 To reset the working directory back to the scenario root after changing it, use an absolute path:
 
@@ -316,7 +397,7 @@ Scenario: CLI writes output to a path it reports
   Then file "$OUTDIR/index.html" contains "<!DOCTYPE html>"
 ```
 
-Don't embed file-existence checks in the `When` shell command just to avoid variable expansion — use `$VAR` directly in `Then` step paths.
+Don't embed file-existence checks in the `When` shell command just to avoid variable expansion - use `$VAR` directly in `Then` step paths.
 
 ### Sequential setup with variable capture
 
@@ -408,19 +489,20 @@ Scenario: CLI respects environment variables
 
 ## Debugging guidance
 
-- If a `Given the working directory is` step fails, the directory does not yet exist in the container — add a `Given the directory "..." exists` step before it.
+- If a `Given the working directory is` step fails, the directory does not yet exist in the container - add a `Given the directory "..." exists` step before it.
 - If a `Given` step fails before `When`, inspect the setup command or path assumptions first.
-- If a file assertion fails, remember paths are relative to `/smoko-work` unless explicitly absolute.
-- If a `Then file "$VAR/..."` path is treated as a literal string (dollar sign visible in error), the variable was not captured — check that `And I save ... as $VAR` immediately follows the `Given I run` that produced the value.
+- If a setup path fails, verify it stays under `/smoko-work` and does not contain `..`.
+- If a file assertion fails, remember paths are relative to `/smoko-work` unless explicitly absolute; `..` is rejected.
+- If a `Then file "$VAR/..."` path is treated as a literal string (dollar sign visible in error), the variable was not captured - check that `And I save ... as $VAR` immediately follows the `Given I run` that produced the value.
 - If regex assertions fail, verify the step uses `matches pattern`, not just `matches`.
 - If a JSON assertion fails, check whether the source is valid JSON, whether the JSONPath is valid, and whether `equals` matched exactly one node.
 - If shared setup is repeated across scenarios, move it into `Background`.
 - If the setup is imperative shell work, prefer `Given I run "..."` over abusing `When`.
-- If a scenario times out, remember the default timeout is `1` second and increase `--timeout` or `.smokorc` only for the slow path.
+- If a scenario times out, Smoko reports the timed-out setup/action command as an error and removes the scenario container during cleanup; remember the default timeout is `1` second and increase `--timeout` or `.smokorc` only for the slow path.
 
 ## Performance
 
-- Prefer `smoko run specs/ --parallel 0` for normal runs so Smoko auto-sizes concurrency.
+- Prefer `smoko run specs/ --parallel 0` for normal runs so Smoko auto-sizes concurrency, capped at 8 workers.
 - Keep the default `1` second timeout unless the command or image is genuinely slow.
 - Use `Background` for repeated setup instead of duplicating expensive `Given` steps in every scenario.
 - Prefer file-based setup steps over long shell setup sequences when both express the same intent.
@@ -436,11 +518,11 @@ smoko run test.smoko --image alpine:latest
 smoko run test.smoko --verbose
 smoko run specs/ --output json   # preferred for agents and tooling
 smoko run test.smoko --fail-fast
-smoko run specs/ --list    # list scenarios without running
+smoko run specs/ --list    # validate and list scenarios without building or running
 smoko run specs/ --no-build   # skip build step even if .smokorc has build = "..."
 ```
 
-`timeout` in `.smokorc` or `--timeout` applies to setup and action commands. The built-in default is `1` second.
+`timeout` in `.smokorc` or `--timeout` applies to setup and action commands. The built-in default is `1` second. A command that exceeds the timeout fails the scenario with a timeout error.
 
 ## .smokorc
 
@@ -450,4 +532,4 @@ timeout = 5
 build   = "docker build -f Dockerfile.test -t myimage:latest ."
 ```
 
-When `build` is set, smoko runs the command before pulling or running any scenarios. Build output streams to the terminal. Use `--no-build` to skip when the image is already current.
+When `build` is set, smoko runs the command before pulling or running any scenarios. Successful build output is hidden by default and streamed when `--verbose` is set; failed builds print the captured output. Each unique Docker image is reported as it is checked or pulled. Use `--no-build` to skip when the image is already current. `--list` validates and lists scenarios without running the build command.

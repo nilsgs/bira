@@ -1,3 +1,4 @@
+@context
 Feature: bira context
 
   Background:
@@ -11,6 +12,7 @@ Feature: bira context
     And output contains "Bugs:"
     And output contains "Features:"
 
+  @json
   Scenario: Context --json returns structured output
     When I run "bira context --json"
     Then exit code is 0
@@ -19,6 +21,7 @@ Feature: bira context
     And output as JSON at path "$.bugs" exists
     And output as JSON at path "$.features" exists
 
+  @json
   Scenario: Context --json counts reflect zero entities after init
     When I run "bira context --json"
     Then exit code is 0
@@ -26,6 +29,7 @@ Feature: bira context
     And output as JSON at path "$.bugs" equals 0
     And output as JSON at path "$.features" equals 0
 
+  @json
   Scenario: Context reflects added entities
     Given I run "bira idea add test-idea"
     Given I run "bira bug create test-bug"
@@ -45,6 +49,7 @@ Feature: bira context
     And output contains "BUGS ("
     And output contains "FEATURES ("
 
+  @json
   Scenario: Context --full --json shows counts and arrays
     Given I run "bira idea add full-idea"
     Given I run "bira bug create full-bug"

@@ -1,3 +1,4 @@
+@idea
 Feature: bira idea
 
   Background:
@@ -9,45 +10,53 @@ Feature: bira idea
     And output contains "Created idea"
     And output contains "my-idea"
 
+  @json
   Scenario: Idea add --json returns structured output
     When I run "bira idea add json-idea --json"
     Then exit code is 0
     And output as JSON at path "$.title" equals "json-idea"
     And output as JSON at path "$.status" equals "inbox"
 
+  @json
   Scenario: Idea add with --desc sets description
     When I run "bira idea add described --desc 'an interesting concept' --json"
     Then exit code is 0
     And output as JSON at path "$.description" equals "an interesting concept"
 
+  @json @tags
   Scenario: Idea add with --tags
     When I run "bira idea add tagged --tags 'ux,perf' --json"
     Then exit code is 0
     And output as JSON at path "$.tags" exists
 
+  @list
   Scenario: Idea list shows ideas
     Given I run "bira idea add list-me"
     When I run "bira idea list"
     Then exit code is 0
     And output contains "list-me"
 
+  @json @list
   Scenario: Idea list --json returns array
     Given I run "bira idea add listed"
     When I run "bira idea list --json"
     Then exit code is 0
     And output contains "listed"
 
+  @list
   Scenario: Idea list --status filters by status
     Given I run "bira idea add inbox-idea"
     When I run "bira idea list --status inbox"
     Then exit code is 0
     And output contains "inbox-idea"
 
+  @failure @list
   Scenario: Idea list --status with invalid value fails
     When I run "bira idea list --status nosuchstatus"
     Then exit code is not 0
     And stderr contains "invalid status"
 
+  @show
   Scenario: Idea show displays idea details
     Given I run "bira idea add show-me --json"
     And I save JSON path "$.id" as $IID
@@ -57,6 +66,7 @@ Feature: bira idea
     And output contains "ID:"
     And output contains "Status:"
 
+  @json @show
   Scenario: Idea show --json returns structured output
     Given I run "bira idea add show-json --json"
     And I save JSON path "$.id" as $IID
@@ -65,10 +75,12 @@ Feature: bira idea
     And output as JSON at path "$.title" equals "show-json"
     And output as JSON at path "$.status" equals "inbox"
 
+  @failure @show
   Scenario: Idea show unknown ID returns exit 2
     When I run "bira idea show deadbeef"
     Then exit code is 2
 
+  @json @triage
   Scenario: Idea triage sets priority and moves to triaged
     Given I run "bira idea add to-triage --json"
     And I save JSON path "$.id" as $IID
@@ -77,6 +89,7 @@ Feature: bira idea
     And output as JSON at path "$.status" equals "triaged"
     And output as JSON at path "$.priority" equals "high"
 
+  @triage
   Scenario: Idea triage human output confirms triage
     Given I run "bira idea add triage-human --json"
     And I save JSON path "$.id" as $IID
@@ -84,6 +97,7 @@ Feature: bira idea
     Then exit code is 0
     And output contains "Triaged idea"
 
+  @json @promote
   Scenario: Idea promote creates a feature
     Given I run "bira idea add to-promote --json"
     And I save JSON path "$.id" as $IID
@@ -93,6 +107,7 @@ Feature: bira idea
     And output as JSON at path "$.status" equals "proposed"
     And output as JSON at path "$.promoted_from" exists
 
+  @promote
   Scenario: Idea promote human output confirms promotion
     Given I run "bira idea add promote-human --json"
     And I save JSON path "$.id" as $IID
@@ -100,6 +115,7 @@ Feature: bira idea
     Then exit code is 0
     And output contains "Promoted idea"
 
+  @note
   Scenario: Idea note appends a note
     Given I run "bira idea add to-note --json"
     And I save JSON path "$.id" as $IID
@@ -107,6 +123,7 @@ Feature: bira idea
     Then exit code is 0
     And output contains "Note added to idea"
 
+  @delete
   Scenario: Idea delete removes the idea
     Given I run "bira idea add to-delete --json"
     And I save JSON path "$.id" as $IID
@@ -114,6 +131,7 @@ Feature: bira idea
     Then exit code is 0
     And output contains "Deleted idea"
 
+  @delete @failure
   Scenario: Idea delete unknown ID returns exit 2
     When I run "bira idea delete deadbeef"
     Then exit code is 2
